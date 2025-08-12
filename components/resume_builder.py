@@ -1,6 +1,11 @@
 from docx import Document
 from io import BytesIO
 import traceback
+import logging
+
+#Set up basic logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 class ResumeBuilder:
     def __init__(self):
@@ -19,39 +24,26 @@ class ResumeBuilder:
         """Generate a resume based on the provided data and template"""
 
         try:
-            print(f"Starting resume generation with template: {data['template']}")
+            template_name = data.get('template', '').strip().lower()
+            logger.info(f"Starting resume generation with template: {template_name}")            
             
             #Create a new document
             doc = Document()
             
             #Select and apply template
-            template_name = data['template'].lower()
-            print(f"Using template: {template_name}")
+            template_method = self.templates.get(template_name, self.build_modern_template)
+            doc = template_method(doc, data)
             
-            if template_name == 'modern':
-                doc = self.build_modern_template(doc, data)
-            elif template_name == 'professional':
-                doc = self.build_professional_template(doc, data)
-            elif template_name == 'minimal':
-                doc = self.build_minimal_template(doc, data)
-            elif template_name == 'creative':
-                doc = self.build_creative_template(doc, data)
-            else:
-                print(f"Warning: Unknown template '{template_name}', falling back to modern template")
-                doc = self.build_modern_template(doc, data)
-            
-            #Save to buffer
+            #Save to in-memory buffer
             buffer = BytesIO()
-            print("Saving document to buffer...")
             doc.save(buffer)
             buffer.seek(0)
-            print("Resume generated successfully!")
+            logger.info("Resume generated successfully.")
             return buffer
             
         except Exception as e:
-            print(f"Error in generate_resume: {str(e)}")
-            print(f"Full traceback: {traceback.format_exc()}")
-            print(f"Template data: {data}")
+            logger.error(f"Error in generate_resume: {e}")
+            logger.debug(traceback.format_exc())
             raise
 
     def _format_list_items(self, items):
@@ -64,18 +56,18 @@ class ResumeBuilder:
             return [item.strip() for item in items if item and item.strip()]
         return []
 
-    def build_modern_template(self):
+    def build_modern_template(self, doc, data):
 
         """Build modern style resume"""
 
-    def build_professional_template(self):
+    def build_professional_template(self, doc, data):
 
         """Build professional style resume"""
 
-    def build_minimal_template(self):
+    def build_minimal_template(self, doc, data):
 
         """Build minimal style resume"""
 
-    def build_creative_template(self):
+    def build_creative_template(self, doc, data):
 
         """Build creative style resume"""
