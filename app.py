@@ -1,10 +1,10 @@
 import streamlit as st
-from config.database import init_database, get_database_connection
+#from config.database import init_database, get_database_connection
 from config.job_roles import JOB_ROLES
-from components.resume_analyzer import ResumeAnalyzer
-from components.ai_resume_analyzer import AIResumeAnalyzer
-from components.resume_builder import ResumeBuilder
-from dashboard.dashboard import DashboardManager
+#from components.resume_analyzer import ResumeAnalyzer
+#from components.ai_resume_analyzer import AIResumeAnalyzer
+#from components.resume_builder import ResumeBuilder
+#from dashboard.dashboard import DashboardManager
 
 st.set_page_config(
     page_title="SkillMatch: Smart Resume Analyzer",
@@ -51,7 +51,7 @@ class SkillMatchApp:
 
         #Define pages dictionary
         self.pages = {
-            "🏠 HOME": self.render_home,
+            #"🏠 HOME": self.render_home,
             #"🔍 RESUME ANALYZER": self.render_analyzer,
             #"📝 RESUME BUILDER": self.render_builder,
             #"📊 DASHBOARD": self.render_dashboard,
@@ -61,10 +61,10 @@ class SkillMatchApp:
         }
 
         #Initialize dashboard manager
-        self.dashboard_manager = DashboardManager()
-        self.analyzer = ResumeAnalyzer()
-        self.ai_analyzer = AIResumeAnalyzer()
-        self.builder = ResumeBuilder()
+        #self.dashboard_manager = DashboardManager()
+        #self.analyzer = ResumeAnalyzer()
+        #self.ai_analyzer = AIResumeAnalyzer()
+        #self.builder = ResumeBuilder()
         self.job_roles = JOB_ROLES
 
         #Initialize session state
@@ -74,7 +74,7 @@ class SkillMatchApp:
             st.session_state.selected_role = None
 
         #Initialize database
-        init_database()
+        #init_database()
 
         #Load external CSS (allowed since my code)
         #with open('style/style.css') as f:
@@ -144,7 +144,6 @@ class SkillMatchApp:
     def main(self):
 
         """Main application entry point"""
-
 
         #Add the footer
         self.add_footer()
