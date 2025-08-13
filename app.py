@@ -3,7 +3,6 @@ import streamlit as st
 from config.job_roles import JOB_ROLES
 #from components.resume_analyzer import ResumeAnalyzer
 #from components.ai_resume_analyzer import AIResumeAnalyzer
-#from components.resume_builder import ResumeBuilder
 #from dashboard.dashboard import DashboardManager
 
 st.set_page_config(
@@ -53,7 +52,6 @@ class SkillMatchApp:
         self.pages = {
             #"🏠 HOME": self.render_home,
             #"🔍 RESUME ANALYZER": self.render_analyzer,
-            #"📝 RESUME BUILDER": self.render_builder,
             #"📊 DASHBOARD": self.render_dashboard,
             #"🎯 JOB SEARCH": self.render_job_search,
             #"💬 FEEDBACK": self.render_feedback_page,
@@ -64,7 +62,6 @@ class SkillMatchApp:
         #self.dashboard_manager = DashboardManager()
         #self.analyzer = ResumeAnalyzer()
         #self.ai_analyzer = AIResumeAnalyzer()
-        #self.builder = ResumeBuilder()
         self.job_roles = JOB_ROLES
 
         #Initialize session state
