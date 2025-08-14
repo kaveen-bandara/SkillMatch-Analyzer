@@ -1,4 +1,6 @@
-#Course recommendations organized by job categories
+from typing import Optional, Union
+
+# Course recommendations organized by job categories
 COURSES_BY_CATEGORY = {
     "Software Development and Engineering": {
         "Frontend Developer": [
@@ -133,7 +135,7 @@ COURSES_BY_CATEGORY = {
     }
 }
 
-#Helper videos for resume and interview preparation
+# Helper videos for resume preparation
 RESUME_VIDEOS = {
     "Resume Writing": [
         ["Resume Writing Masterclass [Free]", "https://youtu.be/Tt08KmFfIYQ"],
@@ -148,6 +150,7 @@ RESUME_VIDEOS = {
     ]
 }
 
+# Helper videos for interview preparation
 INTERVIEW_VIDEOS = {
     "Technical Interviews": [
         ["Coding Interview Preparation [Free]", "https://youtu.be/HG68Ymazo18"],
@@ -166,20 +169,34 @@ INTERVIEW_VIDEOS = {
     ]
 }
 
-def get_courses_for_role(role_name):
+# Precompute role-to-category mapping for faster lookup
+ROLE_TO_CATEGORY = {
+    role: category
+    for category, roles in COURSES_BY_CATEGORY.items()
+    for role in roles
+}
 
-    """Helper function to get courses for a specific role"""
+def get_courses_for_role(role: str) -> Optional[list]:
+    """
+    Returns the list of courses for a specific job role
+    """
+    category = ROLE_TO_CATEGORY.get(role)
+    return COURSES_BY_CATEGORY[category].get(role) if category else None
 
-    for category, roles in COURSES_BY_CATEGORY.items():
-        if role_name in roles:
-            return roles[role_name]
-    return None
+def get_category_for_role(role: str) -> Optional[str]:
+    """
+    Returns the category for a specific job role
+    """
+    return ROLE_TO_CATEGORY.get(role)
 
-def get_category_for_role(role_name):
+def get_resume_videos(category: Optional[str] = None) -> Union[dict, list]:
+    """
+    Returns all resume videos or videos for a specific category
+    """
+    return RESUME_VIDEOS.get(category, []) if category else RESUME_VIDEOS
 
-    """Helper function to get the category for a specific role"""
-    
-    for category, roles in COURSES_BY_CATEGORY.items():
-        if role_name in roles:
-            return category
-    return None
+def get_interview_videos(category: Optional[str] = None) -> Union[dict, list]:
+    """
+    Returns all interview videos or videos for a specific category
+    """
+    return INTERVIEW_VIDEOS.get(category, []) if category else INTERVIEW_VIDEOS
