@@ -1,5 +1,5 @@
 import streamlit as st
-#from config.database import init_database, get_database_connection
+from config.database import init_database, get_database_connection
 from config.job_roles import JOB_ROLES
 #from components.resume_analyzer import ResumeAnalyzer
 #from components.ai_resume_analyzer import AIResumeAnalyzer
@@ -12,11 +12,10 @@ st.set_page_config(
 )
 
 class SkillMatchApp:
-
     def __init__(self):
-
-        """Initialize the application"""
-
+        """
+        Initialize the application
+        """
         #Initialize form data template
         if 'form_data' not in st.session_state:
             st.session_state.form_data = {
@@ -74,7 +73,7 @@ class SkillMatchApp:
         #init_database()
 
         #Load external CSS (allowed since my code)
-        #with open('style/style.css') as f:
+        #with open('styles/styles.css') as f:
             #st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
 
         #Load fonts (allowed since trusted)

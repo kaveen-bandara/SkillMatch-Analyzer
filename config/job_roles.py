@@ -1,3 +1,4 @@
+# Job roles and their required skillsets
 JOB_ROLES = {
     "Software Development and Engineering": {
         "Frontend Developer": {

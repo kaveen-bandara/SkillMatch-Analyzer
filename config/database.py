@@ -122,7 +122,7 @@ def init_database():
     # One analysis per resume
     db.resume_analysis.create_index([("resume_id", 1)], unique=True, name="unique_resume_analysis")
 
-    print("✅ MongoDB collections initialized with schema validation.")
+    print(f"✅ MongoDB collections initialized with schema validation.")
 
 def insert_resume_data(data):
     """
@@ -289,3 +289,8 @@ def get_resume_stats():
     except Exception as e:
         print(f"❌ Error getting resume stats: {str(e)}")
         return None
+    
+
+if __name__ == "__main__":
+    db = get_database_connection()
+    print("Database object:", db)
