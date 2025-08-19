@@ -11,7 +11,6 @@ import platform
 import tempfile
 import zipfile
 import shutil
-import json
 from urllib.request import urlopen, urlretrieve
 
 def get_chrome_version():

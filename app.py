@@ -1,5 +1,9 @@
 import streamlit as st
 from config.database import init_database, get_database_connection
+
+from ui_components import (
+    apply_styles, hero_section, feature_card)
+
 from config.job_roles import JOB_ROLES
 #from components.resume_analyzer import ResumeAnalyzer
 #from components.ai_resume_analyzer import AIResumeAnalyzer
@@ -49,7 +53,7 @@ class SkillMatchApp:
 
         #Define pages dictionary
         self.pages = {
-            #"🏠 HOME": self.render_home,
+            "🏠 HOME": self.render_home,
             #"🔍 RESUME ANALYZER": self.render_analyzer,
             #"📊 DASHBOARD": self.render_dashboard,
             #"🎯 JOB SEARCH": self.render_job_search,
@@ -72,16 +76,6 @@ class SkillMatchApp:
         #Initialize database
         #init_database()
 
-        #Load external CSS (allowed since my code)
-        #with open('styles/styles.css') as f:
-            #st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
-
-        #Load fonts (allowed since trusted)
-        st.markdown("""
-            <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
-            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
-        """, unsafe_allow_html=True)
-
         #Set up default session state
         if 'resume_data' not in st.session_state:
             st.session_state.resume_data = []
@@ -93,13 +87,57 @@ class SkillMatchApp:
             }
 
     def render_home(self):
+        """
+        Render the homepage
+        """
+        apply_styles()
+        
+        # Hero Section
+        hero_section(
+            "SkillMatch: Smart Resume Analyzer",
+            "Transform your career with AI-powered resume tools to analyze and improve your resume. Get personalized insights tailored to your industry and career goals."
+        )
+        
+        # Features Section
+        st.markdown('<div class="feature-grid">', unsafe_allow_html=True)
+        
+        feature_card(
+            "fas fa-robot",
+            "AI-Powered Analysis",
+            "Get instant feedback on your resume with advanced AI analysis that identifies strengths and areas for improvement."
+        )
+        
+        feature_card(
+            "fas fa-chart-line",
+            "Career Insights",
+            "Access detailed analytics and personalized recommendations to enhance your career prospects."
+        )
 
-        st.rerun()
+        feature_card(
+            "fas fa-magic",
+            "Smart Resume Builder",
+            "Create professional resumes with our intelligent builder that suggests optimal content and formatting."
+        )
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+        st.toast("Check 1, 2, 3...", icon="ℹ️")
+
+        # Call-to-Action with Streamlit navigation
+        col1, col2, col3 = st.columns([1, 1, 1])
+        with col2:
+            if st.button("Get Started", key="get_started_btn", 
+                        help="Click to start analyzing your resume",
+                        type="primary",
+                        use_container_width=True):
+                cleaned_name = "🔍 RESUME ANALYZER".lower().replace(" ", "_").replace("🔍", "").strip()
+                st.session_state.page = cleaned_name
+                st.rerun()
 
     def add_footer(self):
-
-        """Add page footer"""
-
+        """
+        Add page footer
+        """
         st.markdown("<hr style='margin-top: 50px; margin-bottom: 20px;'>", unsafe_allow_html=True)
         
         col1, col2, col3 = st.columns([1, 3, 1])
@@ -141,6 +179,7 @@ class SkillMatchApp:
 
         """Main application entry point"""
 
+        self.render_home()
         #Add the footer
         self.add_footer()
 
