@@ -225,7 +225,6 @@ class ResumeAnalyzer:
             # Check for section header
             if any(keyword.lower() in line.lower() for keyword in education_keywords):
                 if not any(keyword.lower() == line.lower() for keyword in education_keywords):
-
                     # This line contains education info, not just a header
                     current_entry.append(line)
 
@@ -252,3 +251,52 @@ class ResumeAnalyzer:
             education.append(" ".join(current_entry))
         
         return education
+    
+    def extract_experience(self, text):
+        """
+        Extract work experience information from resume text
+        """
+        experience = []
+        lines = text.split("\n")
+        experience_keywords = [
+            "experience", "employment", "work history", "professional experience",
+            "work experience", "career history", "professional background",
+            "employment history", "job history", "positions held", "job title",
+            "job responsibilities", "job description", "job summary"
+        ]
+        in_experience_section = False
+        current_entry = []
+
+        for line in lines:
+            line = line.strip()
+
+            # Check for section header
+            if any(keyword.lower() in line.lower() for keyword in experience_keywords):
+                if not any(keyword.lower() == line.lower() for keyword in experience_keywords):
+                    # This line contains experience info, not just a header
+                    current_entry.append(line)
+
+                in_experience_section = True
+                continue
+            
+            if in_experience_section:
+                # Check if we've hit another section
+                if line and any(keyword.lower() in line.lower() for keyword in self.document_types["resume"]):
+                    if not any(exp_key.lower() in line.lower() for exp_key in experience_keywords):
+                        in_experience_section = False
+                        if current_entry:
+                            experience.append(" ".join(current_entry))
+                            current_entry = []
+                            
+                        continue
+                
+                if line:
+                    current_entry.append(line)
+                elif current_entry:
+                    experience.append(" ".join(current_entry))
+                    current_entry = []
+        
+        if current_entry:
+            experience.append(" ".join(current_entry))
+        
+        return experience
