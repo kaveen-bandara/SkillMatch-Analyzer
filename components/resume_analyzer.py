@@ -287,7 +287,7 @@ class ResumeAnalyzer:
                         if current_entry:
                             experience.append(" ".join(current_entry))
                             current_entry = []
-                            
+
                         continue
                 
                 if line:
@@ -300,3 +300,51 @@ class ResumeAnalyzer:
             experience.append(" ".join(current_entry))
         
         return experience
+    
+    def extract_projects(self, text):
+        """
+        Extract project information from resume text
+        """
+        projects = []
+        lines = text.split("\n")
+        project_keywords = [
+            "projects", "personal projects", "academic projects", "key projects",
+            "major projects", "professional projects", "project experience",
+            "relevant projects", "featured projects", "latest projects",
+            "top projects"
+        ]
+        in_project_section = False
+        current_entry = []
+
+        for line in lines:
+            line = line.strip()
+            # Check for section header
+            if any(keyword.lower() in line.lower() for keyword in project_keywords):
+                if not any(keyword.lower() == line.lower() for keyword in project_keywords):
+                    # This line contains project info, not just a header
+                    current_entry.append(line)
+                in_project_section = True
+                continue
+            
+            if in_project_section:
+                # Check if we've hit another section
+                if line and any(keyword.lower() in line.lower() for keyword in self.document_types["resume"]):
+                    if not any(proj_key.lower() in line.lower() for proj_key in project_keywords):
+                        in_project_section = False
+                        if current_entry:
+                            projects.append(" ".join(current_entry))
+                            current_entry = []
+                        continue
+                
+                if line:
+                    current_entry.append(line)
+                elif current_entry:
+                    projects.append(" ".join(current_entry))
+                    current_entry = []
+        
+        if current_entry:
+            projects.append(" ".join(current_entry))
+        
+        return projects
+    
+    
