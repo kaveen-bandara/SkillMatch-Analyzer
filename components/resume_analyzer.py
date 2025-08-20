@@ -1,4 +1,6 @@
 import re
+import PyPDF2
+import io
 
 class ResumeAnalyzer:
     def __init__(self):
@@ -136,3 +138,43 @@ class ResumeAnalyzer:
             deductions.append("Missing or improperly formatted contact information")
             
         return max(0, score), deductions
+    
+    def extract_text_from_pdf(self, pdf_file):
+        """
+        Code to extract text from PDF files
+        """
+        try:       
+            # Handle file input
+            if hasattr(pdf_file, 'read'):
+                file_content = pdf_file.read()
+                pdf_file.seek(0)  # Reset file pointer
+            else:
+                file_content = pdf_file
+                
+            # Create PDF reader
+            pdf_reader = PyPDF2.PdfReader(io.BytesIO(file_content))
+            
+            # Extract text
+            text = ""
+            for page in pdf_reader.pages:
+                text += (page.extract_text() or "") + "\n"
+                
+            return text
+        except Exception as e:
+            raise Exception(f"Error extracting text from PDF: {str(e)}")
+        
+    def extract_text_from_docx(self, docx_file):
+        """
+        Code to extract text from DOCX files
+        """
+        try:
+            from docx import Document
+            doc = Document(docx_file)
+            full_text = []
+            for paragraph in doc.paragraphs:
+                full_text.append(paragraph.text)
+            return '\n'.join(full_text)
+        except Exception as e:
+            raise Exception(f"Error extracting text from DOCX file: {str(e)}")
+        
+    
