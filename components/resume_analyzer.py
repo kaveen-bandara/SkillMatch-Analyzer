@@ -1,6 +1,8 @@
 import re
 import PyPDF2
 import io
+import traceback
+from docx import Document
 
 class ResumeAnalyzer:
     def __init__(self):
@@ -168,12 +170,11 @@ class ResumeAnalyzer:
         Code to extract text from DOCX files
         """
         try:
-            from docx import Document
             doc = Document(docx_file)
             full_text = []
             for paragraph in doc.paragraphs:
                 full_text.append(paragraph.text)
-            return '\n'.join(full_text)
+            return "\n".join(full_text)
         except Exception as e:
             raise Exception(f"Error extracting text from DOCX file: {str(e)}")
         
@@ -200,16 +201,15 @@ class ResumeAnalyzer:
             "name": name if len(name) > 0 else "Unknown name",
             "email": email.group(0) if email else "",
             "phone": phone.group(0) if phone else "",
-            "linkedin": linkedin.group(0) if linkedin else "",
-            "github": github.group(0) if github else ""
+            "linkedin": linkedin.group(0) if linkedin else ""
         }
     
     def extract_education(self, text):
         """
         Extract education information from resume text
         """
+        lines = [line.strip() for line in text.split("\n")]
         education = []
-        lines = text.split("\n")
         education_keywords = [
             "education", "academic", "qualification", "degree", "university", "college",
             "school", "institute", "certification", "diploma", "bachelor", "master",
@@ -220,26 +220,20 @@ class ResumeAnalyzer:
         current_entry = []
 
         for line in lines:
-            line = line.strip()
-
-            # Check for section header
-            if any(keyword.lower() in line.lower() for keyword in education_keywords):
-                if not any(keyword.lower() == line.lower() for keyword in education_keywords):
-                    # This line contains education info, not just a header
+            if any(keyword in line.lower() for keyword in education_keywords):
+                if line.lower() not in [keyword.lower() for keyword in education_keywords]:
                     current_entry.append(line)
-
                 in_education_section = True
                 continue
             
             if in_education_section:
-                # Check if we've hit another section
-                if line and any(keyword.lower() in line.lower() for keyword in self.document_types["resume"]):
-                    if not any(edu_key.lower() in line.lower() for edu_key in education_keywords):
+                if line and any(keyword in line.lower() for keyword in self.document_types["resume"]):
+                    if not any(keyword in line.lower() for keyword in education_keywords):
                         in_education_section = False
                         if current_entry:
                             education.append(" ".join(current_entry))
                             current_entry = []
-                        continue
+                    continue
                 
                 if line:
                     current_entry.append(line)
@@ -256,8 +250,8 @@ class ResumeAnalyzer:
         """
         Extract work experience information from resume text
         """
+        lines = [line.strip() for line in text.split("\n")]
         experience = []
-        lines = text.split("\n")
         experience_keywords = [
             "experience", "employment", "work history", "professional experience",
             "work experience", "career history", "professional background",
@@ -268,27 +262,20 @@ class ResumeAnalyzer:
         current_entry = []
 
         for line in lines:
-            line = line.strip()
-
-            # Check for section header
-            if any(keyword.lower() in line.lower() for keyword in experience_keywords):
-                if not any(keyword.lower() == line.lower() for keyword in experience_keywords):
-                    # This line contains experience info, not just a header
+            if any(keyword in line.lower() for keyword in experience_keywords):
+                if line.lower() not in [keyword.lower() for keyword in experience_keywords]:
                     current_entry.append(line)
-
                 in_experience_section = True
                 continue
             
             if in_experience_section:
-                # Check if we've hit another section
-                if line and any(keyword.lower() in line.lower() for keyword in self.document_types["resume"]):
-                    if not any(exp_key.lower() in line.lower() for exp_key in experience_keywords):
+                if line and any(keyword in line.lower() for keyword in self.document_types["resume"]):
+                    if not any(keyword in line.lower() for keyword in experience_keywords):
                         in_experience_section = False
                         if current_entry:
                             experience.append(" ".join(current_entry))
                             current_entry = []
-
-                        continue
+                    continue
                 
                 if line:
                     current_entry.append(line)
@@ -305,8 +292,8 @@ class ResumeAnalyzer:
         """
         Extract project information from resume text
         """
+        lines = [line.strip() for line in text.split("\n")]
         projects = []
-        lines = text.split("\n")
         project_keywords = [
             "projects", "personal projects", "academic projects", "key projects",
             "major projects", "professional projects", "project experience",
@@ -317,24 +304,20 @@ class ResumeAnalyzer:
         current_entry = []
 
         for line in lines:
-            line = line.strip()
-            # Check for section header
-            if any(keyword.lower() in line.lower() for keyword in project_keywords):
-                if not any(keyword.lower() == line.lower() for keyword in project_keywords):
-                    # This line contains project info, not just a header
+            if any(keyword in line.lower() for keyword in project_keywords):
+                if line.lower() not in [keyword.lower() for keyword in project_keywords]:
                     current_entry.append(line)
                 in_project_section = True
                 continue
             
             if in_project_section:
-                # Check if we've hit another section
-                if line and any(keyword.lower() in line.lower() for keyword in self.document_types["resume"]):
-                    if not any(proj_key.lower() in line.lower() for proj_key in project_keywords):
+                if line and any(keyword in line.lower() for keyword in self.document_types["resume"]):
+                    if not any(keyword in line.lower() for keyword in project_keywords):
                         in_project_section = False
                         if current_entry:
                             projects.append(" ".join(current_entry))
                             current_entry = []
-                        continue
+                    continue
                 
                 if line:
                     current_entry.append(line)
@@ -351,64 +334,49 @@ class ResumeAnalyzer:
         """
         Extract skills from resume text
         """
+        lines = [line.strip() for line in text.split("\n")]
         skills = set()  # Use set to avoid duplicates
-        lines = text.split('\n')
         skills_keywords = [
-            'skills', 'technical skills', 'competencies', 'expertise',
-            'core competencies', 'professional skills', 'key skills',
-            'technical expertise', 'proficiencies', 'qualifications',
-            'top skills', 'key skill', 'major skill', 'personal skill',
-            'soft skills', 'soft skill', 'soft skillset'
+            "skills", "technical skills", "competencies", "expertise",
+            "core competencies", "professional skills", "key skills",
+            "technical expertise", "proficiencies", "qualifications",
+            "top skills", "key skill", "major skill", "personal skill",
+            "soft skills", "soft skill", "soft skillset"
         ]
+        separators = [",", "•", "|", "/", "\\", "·", ">", "-", "–", "―"]
         in_skills_section = False
         current_entry = []
 
-        # Common skill separators
-        separators = [',', '•', '|', '/', '\\', '·', '>', '-', '–', '―']
+        # Seperator splitting logic to reduce redundancy
+        def process_entry(entry_text):
+            for sep in separators:
+                if sep in entry_text:
+                    skills.update(skill.strip() for skill in entry_text.split(sep) if skill.strip())
 
         for line in lines:
-            line = line.strip()
-            # Check for section header
-            if any(keyword.lower() in line.lower() for keyword in skills_keywords):
-                if not any(keyword.lower() == line.lower() for keyword in skills_keywords):
-                    # This line contains skills, not just a header
+            if any(keyword in line.lower() for keyword in skills_keywords):
+                if line.lower() not in [keyword.lower() for keyword in skills_keywords]:
                     current_entry.append(line)
-
                 in_skills_section = True
                 continue
             
             if in_skills_section:
-                # Check if we've hit another section
-                if line and any(keyword.lower() in line.lower() for keyword in self.document_types["resume"]):
-                    if not any(skill_key.lower() in line.lower() for skill_key in skills_keywords):
+                if line and any(keyword in line.lower() for keyword in self.document_types["resume"]):
+                    if not any(keyword in line.lower() for keyword in skills_keywords):
                         in_skills_section = False
                         if current_entry:
-                            # Process the current entry
-                            text_to_process = " ".join(current_entry)
-                            # Split by common separators
-                            for separator in separators:
-                                if separator in text_to_process:
-                                    skills.update(skill.strip() for skill in text_to_process.split(separator) if skill.strip())
+                            process_entry(" ".join(current_entry))
                             current_entry = []
-                        continue
+                    continue
                 
                 if line:
                     current_entry.append(line)
                 elif current_entry:
-                    # Process the current entry
-                    text_to_process = " ".join(current_entry)
-                    # Split by common separators
-                    for separator in separators:
-                        if separator in text_to_process:
-                            skills.update(skill.strip() for skill in text_to_process.split(separator) if skill.strip())
+                    process_entry(" ".join(current_entry))
                     current_entry = []
         
         if current_entry:
-            # Process any remaining skills
-            text_to_process = " ".join(current_entry)
-            for separator in separators:
-                if separator in text_to_process:
-                    skills.update(skill.strip() for skill in text_to_process.split(separator) if skill.strip())
+            process_entry(" ".join(current_entry))
         
         return list(skills)
     
@@ -416,58 +384,40 @@ class ResumeAnalyzer:
         """
         Extract summary from resume text
         """
+        lines = [line.strip() for line in text.split("\n")]
         summary = []
-        lines = text.split("\n")
         summary_keywords = [
-            'summary', 'professional summary', 'career summary', 'objective',
-            'career objective', 'professional objective', 'about me', 'profile',
-            'professional profile', 'career profile', 'overview', 'skill summary'
+            "summary", "professional summary", "career summary", "objective", "bio",
+            "career objective", "professional objective", "about me", "profile",
+            "professional profile", "career profile", "overview", "skill summary"
         ]
         in_summary_section = False
         current_entry = []
 
         # Try to find summary at the beginning of the resume
-        start_index = 0
-        while start_index < min(10, len(lines)) and not lines[start_index].strip():
-            start_index += 1
-
-        # Check first few non-empty lines for potential summary
-        first_lines = []
-        lines_checked = 0
-        for line in lines[start_index:]:
-            if line.strip():
-                first_lines.append(line.strip())
-                lines_checked += 1
-                if lines_checked >= 5:  # Check first 5 non-empty lines
-                    break
-
-        # If first few lines look like a summary (no special formatting, no contact info)
+        first_lines = [line for line in lines[:10] if line][:5] # first 5 non-empty within first 10 lines
         if first_lines and not any(keyword in first_lines[0].lower() for keyword in summary_keywords):
             potential_summary = " ".join(first_lines)
-            if len(potential_summary.split()) > 10:  # More than 10 words
-                if not re.search(r"\b(?:email|phone|address|tel|mobile|linkedin)\b", potential_summary.lower()):
+            if len(potential_summary.split()) > 10:
+                if not re.search(r"\b(email|phone|address|tel|mobile|linkedin|github)\b", potential_summary.lower()):
                     summary.append(potential_summary)
 
         # Look for explicitly marked summary section
         for line in lines:
-            line = line.strip()
-            # Check for section header
-            if any(keyword.lower() in line.lower() for keyword in summary_keywords):
-                if not any(keyword.lower() == line.lower() for keyword in summary_keywords):
-                    # This line contains summary info, not just a header
+            if any(keyword in line.lower() for keyword in summary_keywords):
+                if line.lower() not in [keyword.lower() for keyword in summary_keywords]:
                     current_entry.append(line)
                 in_summary_section = True
                 continue
             
             if in_summary_section:
-                # Check if we've hit another section
-                if line and any(keyword.lower() in line.lower() for keyword in self.document_types["resume"]):
-                    if not any(sum_key.lower() in line.lower() for sum_key in summary_keywords):
+                if line and any(keyword in line.lower() for keyword in self.document_types["resume"]):
+                    if not any(keyword in line.lower() for keyword in summary_keywords):
                         in_summary_section = False
                         if current_entry:
                             summary.append(" ".join(current_entry))
                             current_entry = []
-                        continue
+                    continue
                 
                 if line:
                     current_entry.append(line)
@@ -479,3 +429,185 @@ class ResumeAnalyzer:
             summary.append(" ".join(current_entry))
         
         return " ".join(summary) if summary else ""
+    
+    def analyze_resume(self, resume_data, job_requirements):
+        """
+        Analyze resume and return scores and recommendations
+        """
+        try:
+            text = resume_data.get("raw_text", "")
+            
+            # Extract personal information
+            personal_info = self.extract_personal_info(text)
+            
+            # Detect document type first
+            doc_type = self.detect_document_type(text)
+            if doc_type != "resume":
+                return {
+                    "ats_score": 0,
+                    "document_type": doc_type,
+                    "keyword_match": {"score": 0, "found_skills": [], "missing_skills": []},
+                    "section_score": 0,
+                    "format_score": 0,
+                    "suggestions": [f"This appears to be a {doc_type} document. Please upload a resume for ATS analysis"]
+                }
+                
+            # Calculate keyword match
+            required_skills = job_requirements.get("required_skills", [])
+            keyword_match = self.calculate_keyword_match(text, required_skills)
+            
+            # Extract resume sections
+            education = self.extract_education(text)
+            experience = self.extract_experience(text)
+            projects = self.extract_projects(text)
+            skills = list(self.extract_skills(text))  # Convert set to list
+            summary = self.extract_summary(text)
+            
+            # Section and formatting scores
+            section_score = self.check_resume_sections(text)
+            format_score, format_deductions = self.check_formatting(text)
+            
+            # -----------------------
+            # Suggestions by category
+            # -----------------------
+            contact_suggestions = []
+            if not personal_info.get("email"):
+                contact_suggestions.append("Add your email address")
+            if not personal_info.get("phone"):
+                contact_suggestions.append("Add your phone number")
+            if not personal_info.get("linkedin"):
+                contact_suggestions.append("Add your LinkedIn profile URL")
+            
+            summary_suggestions = []
+            if not summary:
+                summary_suggestions.append("Add a professional summary to highlight your key qualifications")
+            elif len(summary.split()) < 30:
+                summary_suggestions.append("Expand your professional summary to better highlight your experience and goals")
+            elif len(summary.split()) > 100:
+                summary_suggestions.append("Consider making your summary more concise (aim for 50-75 words)")
+            
+            skills_suggestions = []
+            if not skills:
+                skills_suggestions.append("Add a dedicated skills section")
+            if len(skills) < 5:
+                skills_suggestions.append("List more relevant technical and soft skills")
+            if keyword_match["score"] < 70:
+                skills_suggestions.append("Add more skills that match the job requirements")
+            
+            experience_suggestions = []
+            if not experience:
+                experience_suggestions.append("Add your work experience section!")
+            else:
+                has_dates = any(re.search(r"\b(19|20)\d{2}\b", exp) for exp in experience)
+                has_bullets = any(re.search(r"[•\-\*]", exp) for exp in experience)
+                has_action_verbs = any(
+                    re.search(r"\b(developed|managed|created|implemented|designed|led|improved)\b", exp.lower()) 
+                    for exp in experience
+                )
+                
+                if not has_dates:
+                    experience_suggestions.append("Include dates for each work experience")
+                if not has_bullets:
+                    experience_suggestions.append("Use bullet points to list your achievements and responsibilities")
+                if not has_action_verbs:
+                    experience_suggestions.append("Start bullet points with strong action verbs")
+            
+            education_suggestions = []
+            if not education:
+                education_suggestions.append("Add your educational background")
+            else:
+                has_dates = any(re.search(r"\b(19|20)\d{2}\b", edu) for edu in education)
+                has_degree = any(
+                    re.search(r"\b(bachelor|master|phd|b\.|m\.|diploma)\b", edu.lower()) for edu in education
+                )
+                has_gpa = any(re.search(r"\b(gpa|cgpa|grade|percentage)\b", edu.lower()) for edu in education)
+                
+                if not has_dates:
+                    education_suggestions.append("Include graduation dates")
+                if not has_degree:
+                    education_suggestions.append("Specify your degree type")
+                if not has_gpa and job_requirements.get("require_gpa", False):
+                    education_suggestions.append("Include your GPA if it's above 3.0")
+            
+            format_suggestions = format_deductions if format_score < 100 else []
+            
+            # ---------------------------------
+            # Calculate section-specific scores
+            # ---------------------------------
+            contact_score = 100 - (len(contact_suggestions) * 25)  # -25 for each missing item
+            summary_score = 100 - (len(summary_suggestions) * 33)  # -33 for each issue
+            skills_score = keyword_match["score"]
+            experience_score = 100 - (len(experience_suggestions) * 25)
+            education_score = 100 - (len(education_suggestions) * 25)
+            
+            # ---------------------
+            # ATS score calcualtion
+            # ---------------------
+            ats_score = (
+                int(round(contact_score * 0.1)) +      # 10% contact info
+                int(round(summary_score * 0.1)) +      # 10% summary
+                int(round(skills_score * 0.3)) +       # 30% skills match
+                int(round(experience_score * 0.2)) +   # 20% experience
+                int(round(education_score * 0.1)) +    # 10% education
+                int(round(format_score * 0.2))         # 20% formatting
+            )
+            
+            # Combine all suggestions
+            suggestions = (
+            contact_suggestions +
+            summary_suggestions +
+            skills_suggestions +
+            experience_suggestions +
+            education_suggestions +
+            format_suggestions
+            )
+            
+            if not suggestions:
+                suggestions.append("Your resume is well-optimized for ATS systems")
+            
+            # -----------------------
+            # Final structured result
+            # -----------------------
+            return {
+                **personal_info,
+                "ats_score": ats_score,
+                "document_type": "resume",
+                "keyword_match": keyword_match,
+                "section_score": section_score,
+                "format_score": format_score,
+                "education": education,
+                "experience": experience,
+                "projects": projects,
+                "skills": skills,
+                "summary": summary,
+                "suggestions": suggestions,
+                "contact_suggestions": contact_suggestions,
+                "summary_suggestions": summary_suggestions,
+                "skills_suggestions": skills_suggestions,
+                "experience_suggestions": experience_suggestions,
+                "education_suggestions": education_suggestions,
+                "format_suggestions": format_suggestions,
+                "section_scores": {
+                    "contact": contact_score,
+                    "summary": summary_score,
+                    "skills": skills_score,
+                    "experience": experience_score,
+                    "education": education_score,
+                    "format": format_score,
+                }
+            }
+        
+        except Exception as e:
+            print(f"Error analyzing resume: {str(e)}")
+            print(traceback.format_exc())
+
+            # Default error response
+            return {
+                "error": f"Resume analysis failed: {str(e)}",
+                "ats_score": 0,
+                "document_type": "unknown",
+                "keyword_match": {"score": 0, "found_skills": [], "missing_skills": []},
+                "section_score": 0,
+                "format_score": 0,
+                "suggestions": [f"Error analyzing resume: {str(e)}. Please check your file and try again"]
+            }
