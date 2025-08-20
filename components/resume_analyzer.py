@@ -347,4 +347,67 @@ class ResumeAnalyzer:
         
         return projects
     
-    
+    def extract_skills(self, text):
+        """
+        Extract skills from resume text
+        """
+        skills = set()  # Use set to avoid duplicates
+        lines = text.split('\n')
+        skills_keywords = [
+            'skills', 'technical skills', 'competencies', 'expertise',
+            'core competencies', 'professional skills', 'key skills',
+            'technical expertise', 'proficiencies', 'qualifications',
+            'top skills', 'key skill', 'major skill', 'personal skill',
+            'soft skills', 'soft skill', 'soft skillset'
+        ]
+        in_skills_section = False
+        current_entry = []
+
+        # Common skill separators
+        separators = [',', '•', '|', '/', '\\', '·', '>', '-', '–', '―']
+
+        for line in lines:
+            line = line.strip()
+            # Check for section header
+            if any(keyword.lower() in line.lower() for keyword in skills_keywords):
+                if not any(keyword.lower() == line.lower() for keyword in skills_keywords):
+                    # This line contains skills, not just a header
+                    current_entry.append(line)
+
+                in_skills_section = True
+                continue
+            
+            if in_skills_section:
+                # Check if we've hit another section
+                if line and any(keyword.lower() in line.lower() for keyword in self.document_types["resume"]):
+                    if not any(skill_key.lower() in line.lower() for skill_key in skills_keywords):
+                        in_skills_section = False
+                        if current_entry:
+                            # Process the current entry
+                            text_to_process = " ".join(current_entry)
+                            # Split by common separators
+                            for separator in separators:
+                                if separator in text_to_process:
+                                    skills.update(skill.strip() for skill in text_to_process.split(separator) if skill.strip())
+                            current_entry = []
+                        continue
+                
+                if line:
+                    current_entry.append(line)
+                elif current_entry:
+                    # Process the current entry
+                    text_to_process = " ".join(current_entry)
+                    # Split by common separators
+                    for separator in separators:
+                        if separator in text_to_process:
+                            skills.update(skill.strip() for skill in text_to_process.split(separator) if skill.strip())
+                    current_entry = []
+        
+        if current_entry:
+            # Process any remaining skills
+            text_to_process = " ".join(current_entry)
+            for separator in separators:
+                if separator in text_to_process:
+                    skills.update(skill.strip() for skill in text_to_process.split(separator) if skill.strip())
+        
+        return list(skills)
