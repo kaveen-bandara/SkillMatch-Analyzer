@@ -411,3 +411,71 @@ class ResumeAnalyzer:
                     skills.update(skill.strip() for skill in text_to_process.split(separator) if skill.strip())
         
         return list(skills)
+    
+    def extract_summary(self, text):
+        """
+        Extract summary from resume text
+        """
+        summary = []
+        lines = text.split("\n")
+        summary_keywords = [
+            'summary', 'professional summary', 'career summary', 'objective',
+            'career objective', 'professional objective', 'about me', 'profile',
+            'professional profile', 'career profile', 'overview', 'skill summary'
+        ]
+        in_summary_section = False
+        current_entry = []
+
+        # Try to find summary at the beginning of the resume
+        start_index = 0
+        while start_index < min(10, len(lines)) and not lines[start_index].strip():
+            start_index += 1
+
+        # Check first few non-empty lines for potential summary
+        first_lines = []
+        lines_checked = 0
+        for line in lines[start_index:]:
+            if line.strip():
+                first_lines.append(line.strip())
+                lines_checked += 1
+                if lines_checked >= 5:  # Check first 5 non-empty lines
+                    break
+
+        # If first few lines look like a summary (no special formatting, no contact info)
+        if first_lines and not any(keyword in first_lines[0].lower() for keyword in summary_keywords):
+            potential_summary = " ".join(first_lines)
+            if len(potential_summary.split()) > 10:  # More than 10 words
+                if not re.search(r"\b(?:email|phone|address|tel|mobile|linkedin)\b", potential_summary.lower()):
+                    summary.append(potential_summary)
+
+        # Look for explicitly marked summary section
+        for line in lines:
+            line = line.strip()
+            # Check for section header
+            if any(keyword.lower() in line.lower() for keyword in summary_keywords):
+                if not any(keyword.lower() == line.lower() for keyword in summary_keywords):
+                    # This line contains summary info, not just a header
+                    current_entry.append(line)
+                in_summary_section = True
+                continue
+            
+            if in_summary_section:
+                # Check if we've hit another section
+                if line and any(keyword.lower() in line.lower() for keyword in self.document_types["resume"]):
+                    if not any(sum_key.lower() in line.lower() for sum_key in summary_keywords):
+                        in_summary_section = False
+                        if current_entry:
+                            summary.append(" ".join(current_entry))
+                            current_entry = []
+                        continue
+                
+                if line:
+                    current_entry.append(line)
+                elif current_entry:
+                    summary.append(" ".join(current_entry))
+                    current_entry = []
+        
+        if current_entry:
+            summary.append(" ".join(current_entry))
+        
+        return " ".join(summary) if summary else ""
