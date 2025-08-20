@@ -204,3 +204,51 @@ class ResumeAnalyzer:
             "github": github.group(0) if github else ""
         }
     
+    def extract_education(self, text):
+        """
+        Extract education information from resume text
+        """
+        education = []
+        lines = text.split("\n")
+        education_keywords = [
+            "education", "academic", "qualification", "degree", "university", "college",
+            "school", "institute", "certification", "diploma", "bachelor", "master",
+            "phd", "b.tech", "m.tech", "b.e", "m.e", "b.sc", "m.sc","bca", "mca", "b.com",
+            "m.com", "b.cs-it", "imca", "bba", "mba", "honors", "scholarship"
+        ]
+        in_education_section = False
+        current_entry = []
+
+        for line in lines:
+            line = line.strip()
+
+            # Check for section header
+            if any(keyword.lower() in line.lower() for keyword in education_keywords):
+                if not any(keyword.lower() == line.lower() for keyword in education_keywords):
+
+                    # This line contains education info, not just a header
+                    current_entry.append(line)
+
+                in_education_section = True
+                continue
+            
+            if in_education_section:
+                # Check if we've hit another section
+                if line and any(keyword.lower() in line.lower() for keyword in self.document_types["resume"]):
+                    if not any(edu_key.lower() in line.lower() for edu_key in education_keywords):
+                        in_education_section = False
+                        if current_entry:
+                            education.append(" ".join(current_entry))
+                            current_entry = []
+                        continue
+                
+                if line:
+                    current_entry.append(line)
+                elif current_entry:
+                    education.append(" ".join(current_entry))
+                    current_entry = []
+        
+        if current_entry:
+            education.append(" ".join(current_entry))
+        
+        return education
