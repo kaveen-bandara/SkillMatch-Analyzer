@@ -1095,6 +1095,530 @@ class AIResumeAnalyzer:
             st.code(traceback.format_exc())
             return None
         
-    
+    def simple_generate_pdf_report(self, analysis_result, candidate_name, job_role):
+        """Generate a simple PDF report without complex charts as a fallback"""
+        try:
+            # Import required libraries
+            try:
+                from reportlab.lib.pagesizes import letter
+                from reportlab.lib import colors
+                from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, Flowable, KeepTogether
+                from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+                from reportlab.lib.units import inch
+                from reportlab.graphics.shapes import Drawing, Rect, String, Line
+                from reportlab.graphics.charts.piecharts import Pie
+                from reportlab.graphics.charts.barcharts import VerticalBarChart
+                from reportlab.graphics.charts.linecharts import HorizontalLineChart
+                from reportlab.graphics.charts.legends import Legend
+                import io
+                import datetime
+                import math
+            except ImportError as e:
+                st.error(f"Error importing PDF libraries: {str(e)}")
+                st.info("Please make sure reportlab is installed: pip install reportlab")
+                return None
+            
+            # Helper function to clean markdown formatting
+            def clean_markdown(text):
+                if not text:
+                    return ""
+                
+                # Remove markdown formatting for bold and italic
+                text = re.sub(r'\*\*(.*?)\*\*', r'\1', text)  # Remove ** for bold
+                text = re.sub(r'\*(.*?)\*', r'\1', text)      # Remove * for italic
+                text = re.sub(r'__(.*?)__', r'\1', text)      # Remove __ for bold
+                text = re.sub(r'_(.*?)_', r'\1', text)        # Remove _ for italic
+                
+                # Remove markdown formatting for headers
+                text = re.sub(r'^#{1,6}\s+', '', text, flags=re.MULTILINE)
+                
+                # Remove markdown formatting for links
+                text = re.sub(r'\[(.*?)\]\(.*?\)', r'\1', text)
+                
+                return text.strip()
+            
+            # Validate input data
+            if not analysis_result:
+                st.error("No analysis result provided for PDF generation")
+                return None
+                
+            # Create a buffer for the PDF
+            buffer = io.BytesIO()
+            
+            # Create the PDF document
+            doc = SimpleDocTemplate(buffer, pagesize=letter, 
+                                   leftMargin=0.5*inch, rightMargin=0.5*inch,
+                                   topMargin=0.5*inch, bottomMargin=0.5*inch)
+            styles = getSampleStyleSheet()
+            
+            # Create custom styles
+            title_style = ParagraphStyle(
+                'Title',
+                parent=styles['Heading1'],
+                fontSize=20,
+                textColor=colors.darkblue,
+                spaceAfter=12,
+                alignment=1  # Center alignment
+            )
+            
+            subtitle_style = ParagraphStyle(
+                'Subtitle',
+                parent=styles['Heading2'],
+                fontSize=14,
+                textColor=colors.darkblue,
+                spaceAfter=12,
+                alignment=1  # Center alignment
+            )
+            
+            heading_style = ParagraphStyle(
+                'Heading',
+                parent=styles['Heading2'],
+                fontSize=14,
+                textColor=colors.white,
+                spaceAfter=6,
+                backColor=colors.darkblue,
+                borderWidth=1,
+                borderColor=colors.grey,
+                borderPadding=5,
+                borderRadius=5,
+                alignment=1  # Center alignment
+            )
+            
+            subheading_style = ParagraphStyle(
+                'SubHeading',
+                parent=styles['Heading3'],
+                fontSize=12,
+                textColor=colors.darkblue,
+                spaceAfter=6
+            )
+            
+            normal_style = ParagraphStyle(
+                'Normal',
+                parent=styles['Normal'],
+                fontSize=10,
+                spaceAfter=6,
+                leading=14  # Line spacing
+            )
+            
+            list_item_style = ParagraphStyle(
+                'ListItem',
+                parent=normal_style,
+                leftIndent=20,
+                firstLineIndent=-15,
+                spaceBefore=2,
+                spaceAfter=2
+            )
+            
+            # Create a simple gauge chart class
+            class SimpleGaugeChart(Flowable):
+                def __init__(self, score, width=300, height=200, label="Resume Score"):
+                    Flowable.__init__(self)
+                    self.score = int(score) if score is not None else 0  # Ensure score is an integer
+                    self.width = width
+                    self.height = height
+                    self.label = label
+                    
+                    # Determine color based on score percentage
+                    if self.score >= 80:
+                        self.color = colors.green
+                        self.status = "Excellent"
+                    elif self.score >= 60:
+                        self.color = colors.orange
+                        self.status = "Good"
+                    else:
+                        self.color = colors.red
+                        self.status = "Needs Improvement"
+                
+                def draw(self):
+                    # Draw the gauge
+                    canvas = self.canv
+                    canvas.saveState()
+                    
+                    # Draw gauge background (semi-circle)
+                    center_x = self.width / 2
+                    center_y = self.height / 2
+                    radius = min(center_x, center_y) - 30
+                    
+                    # Draw the gauge background
+                    canvas.setFillColor(colors.lightgrey)
+                    canvas.setStrokeColor(colors.grey)
+                    canvas.setLineWidth(1)
+                    
+                    # Draw the semi-circle background
+                    p = canvas.beginPath()
+                    p.moveTo(center_x, center_y)
+                    p.arcTo(center_x - radius, center_y - radius, center_x + radius, center_y + radius, 0, 180)
+                    p.lineTo(center_x, center_y)
+                    p.close()
+                    canvas.drawPath(p, fill=1, stroke=1)
+                    
+                    # Draw the colored arc for the score
+                    if self.score > 0:  # Only draw if score > 0
+                        angle = 180 * self.score / 100
+                        p = canvas.beginPath()
+                        p.moveTo(center_x, center_y)
+                        p.arcTo(center_x - radius, center_y - radius, center_x + radius, center_y + radius, 180, 180-angle)
+                        p.lineTo(center_x, center_y)
+                        p.close()
+                        canvas.setFillColor(self.color)
+                        canvas.drawPath(p, fill=1, stroke=0)
+                    
+                    # Draw score text
+                    canvas.setFillColor(self.color)
+                    canvas.setFont("Helvetica-Bold", 24)
+                    canvas.drawCentredString(center_x, center_y - 15, f"{self.score}")
+                    
+                    # Draw status text
+                    canvas.setFillColor(self.color)
+                    canvas.setFont("Helvetica", 12)
+                    canvas.drawCentredString(center_x, center_y - 35, self.status)
+                    
+                    # Draw "Resume Score" label
+                    canvas.setFillColor(colors.darkblue)
+                    canvas.setFont("Helvetica-Bold", 14)
+                    canvas.drawCentredString(center_x, self.height - 20, self.label)
+                    
+                    # Draw scale markers
+                    canvas.setStrokeColor(colors.black)
+                    canvas.setLineWidth(1)
+                    for i in range(0, 101, 20):
+                        angle_rad = math.radians(180 - (i * 1.8))
+                        x = center_x + radius * math.cos(angle_rad)
+                        y = center_y + radius * math.sin(angle_rad)
+                        
+                        # Draw tick marks
+                        x2 = center_x + (radius - 5) * math.cos(angle_rad)
+                        y2 = center_y + (radius - 5) * math.sin(angle_rad)
+                        canvas.line(x, y, x2, y2)
+                        
+                        # Draw numbers
+                        canvas.setFont("Helvetica", 8)
+                        num_x = center_x + (radius - 15) * math.cos(angle_rad)
+                        num_y = center_y + (radius - 15) * math.sin(angle_rad)
+                        canvas.drawCentredString(num_x, num_y, str(i))
+                    
+                    canvas.restoreState()
+                
+                def wrap(self, availWidth, availHeight):
+                    return (self.width, self.height)
+            
+            # Create the content
+            content = []
+            
+            # Add a header with date
+            current_date = datetime.datetime.now().strftime("%B %d, %Y")
+            content.append(Paragraph(f"Resume Analysis Report", title_style))
+            content.append(Paragraph(f"Generated on {current_date}", subtitle_style))
+            content.append(Spacer(1, 0.25*inch))
+            
+            # Format candidate name - if it's just "Candidate", add a number
+            if not candidate_name or candidate_name.lower() == "candidate" or candidate_name.strip() == "":
+                import random
+                candidate_name = f"Candidate_{random.randint(1000, 9999)}"
+            
+            # Add candidate name and job role in a table
+            info_data = [
+                ["Candidate:", candidate_name],
+                ["Target Role:", job_role if job_role else "Not specified"]
+            ]
+            
+            info_table = Table(info_data, colWidths=[1.5*inch, 5*inch])
+            info_table.setStyle(TableStyle([
+                ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, -1), 12),
+                ('TEXTCOLOR', (0, 0), (0, -1), colors.darkblue),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
+            ]))
+            
+            content.append(info_table)
+            content.append(Spacer(1, 0.25*inch))
+            
+            # Add model used information with proper spacing
+            model_used = analysis_result.get("model_used", "AI")
+            model_data = [["Analysis performed by:\u2003\u2003\u2003", "", model_used]]
+            model_table = Table(model_data, colWidths=[3.5*inch, 1*inch, 5*inch])
+            model_table.setStyle(TableStyle([
+                ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, -1), 12),
+                ('TEXTCOLOR', (0, 0), (0, -1), colors.darkblue),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 20),
+            ]))
+            
+            content.append(model_table)
+            content.append(Spacer(1, 0.25*inch))
+            
+            # Add Resume Evaluation section
+            content.append(Paragraph("Resume Evaluation", heading_style))
+            content.append(Spacer(1, 0.1*inch))
+            
+            # Extract scores
+            resume_score = analysis_result.get("score", 0)
+            if resume_score == 0:
+                # Try to get from resume_score
+                resume_score = analysis_result.get("resume_score", 0)
+                
+                # If still 0, try to extract from the analysis text
+                if resume_score == 0 and "Resume Score:" in analysis_text:
+                    score_match = re.search(r'Resume Score:\s*(\d{1,3})/100', analysis_text)
+                    if score_match:
+                        resume_score = int(score_match.group(1))
+                    else:
+                        # Try another pattern
+                        score_match = re.search(r'\bResume Score:\s*(\d{1,3})\b', analysis_text)
+                        if score_match:
+                            resume_score = int(score_match.group(1))
+                        else:
+                            # Try to find any number after "Resume Score:"
+                            score_section = analysis_text.split("Resume Score:")[1].split("\n")[0].strip()
+                            score_match = re.search(r'\b(\d{1,3})\b', score_section)
+                            if score_match:
+                                resume_score = int(score_match.group(1))
+
+            # Ensure resume_score is a valid integer
+            resume_score = int(resume_score) if resume_score else 0
+            resume_score = max(0, min(resume_score, 100))  # Ensure it's between 0 and 100
+
+            # Create a table with the simple gauge
+            score_table_data = [
+                ["Resume Score"],
+                [SimpleGaugeChart(score=resume_score, width=300, height=200, label="Resume Score")]
+            ]
+            
+            score_table = Table(score_table_data, colWidths=[6*inch])
+            score_table.setStyle(TableStyle([
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('FONTNAME', (0, 0), (0, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (0, 0), 14),
+                ('TEXTCOLOR', (0, 0), (0, 0), colors.darkblue),
+                ('BOTTOMPADDING', (0, 0), (0, 0), 10),
+            ]))
+            
+            content.append(score_table)
+            content.append(Spacer(1, 0.25*inch))
+            
+            # Add Executive Summary section
+            content.append(Paragraph("Executive Summary", heading_style))
+            content.append(Spacer(1, 0.1*inch))
+            
+            # Extract overall assessment
+            analysis_text = analysis_result.get("full_response", "")
+            if not analysis_text:
+                analysis_text = analysis_result.get("analysis", "")
+                
+            overall_assessment = ""
+            if "## Overall Assessment" in analysis_text:
+                overall_section = analysis_text.split("## Overall Assessment")[1].split("##")[0].strip()
+                overall_assessment = clean_markdown(overall_section)
+            
+            content.append(Paragraph(overall_assessment, normal_style))
+            content.append(Spacer(1, 0.2*inch))
+            
+            # Key Strengths and Areas for Improvement section
+            content.append(Paragraph("Key Strengths and Areas for Improvement", subheading_style))
+            content.append(Spacer(1, 0.1*inch))
+
+            if strengths or weaknesses:
+                # Create data for strengths and weaknesses
+                sw_data = [["Key Strengths", "Areas for Improvement"]]
+                
+                # Get max length of strengths and weaknesses
+                max_len = max(len(strengths), len(weaknesses), 1)
+                
+                for i in range(max_len):
+                    strength = f"• {clean_markdown(strengths[i])}" if i < len(strengths) else ""
+                    weakness = f"• {clean_markdown(weaknesses[i])}" if i < len(weaknesses) else ""
+                    sw_data.append([
+                        Paragraph(strength, list_item_style) if strength else "",
+                        Paragraph(weakness, list_item_style) if weakness else ""
+                    ])
+                
+                sw_table = Table(sw_data, colWidths=[3*inch, 3*inch])
+                sw_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (0, 0), colors.lightgreen),
+                    ('BACKGROUND', (1, 0), (1, 0), colors.salmon),
+                    ('TEXTCOLOR', (0, 0), (1, 0), colors.black),
+                    ('ALIGN', (0, 0), (1, 0), 'CENTER'),
+                    ('FONTNAME', (0, 0), (1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (1, 0), 12),
+                    ('BOTTOMPADDING', (0, 0), (1, 0), 10),
+                    ('GRID', (0, 0), (1, -1), 1, colors.black),
+                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ]))
+                
+                content.append(sw_table)
+            else:
+                # Add empty strengths and weaknesses with a message
+                empty_data = [
+                    ["Key Strengths", "Areas for Improvement"],
+                    [
+                        Paragraph("No specific strengths identified in the analysis.", normal_style),
+                        Paragraph("No specific areas for improvement identified in the analysis.", normal_style)
+                    ]
+                ]
+                empty_table = Table(empty_data, colWidths=[3*inch, 3*inch])
+                empty_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (0, 0), colors.lightgreen),
+                    ('BACKGROUND', (1, 0), (1, 0), colors.salmon),
+                    ('TEXTCOLOR', (0, 0), (1, 0), colors.black),
+                    ('ALIGN', (0, 0), (1, 0), 'CENTER'),
+                    ('FONTNAME', (0, 0), (1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (1, 0), 12),
+                    ('BOTTOMPADDING', (0, 0), (1, 0), 10),
+                    ('GRID', (0, 0), (1, -1), 1, colors.black),
+                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ]))
+                
+                content.append(empty_table)
+
+            content.append(Spacer(1, 0.25*inch))
+            
+            # Use the process_sections method to handle detailed analysis
+            content = self.process_sections(analysis_text, content, normal_style, list_item_style, subheading_style, heading_style, clean_markdown)
+            
+            # Add course recommendations
+            course_recommendations = []
+            
+            # Try to get course recommendations from different sources
+            if "suggestions" in analysis_result:
+                course_recommendations = analysis_result.get("suggestions", [])
+            
+            # If still no recommendations, try to extract from text
+            if not course_recommendations and "## Recommended Courses" in analysis_text:
+                recommendations_section = analysis_text.split("## Recommended Courses")[1].split("##")[0].strip()
+                course_recommendations = [clean_markdown(r.strip().replace("- ", "").replace("* ", "").replace("• ", "")) 
+                              for r in recommendations_section.split("\n") 
+                              if r.strip() and (r.strip().startswith("-") or r.strip().startswith("*") or r.strip().startswith("•"))]
+            
+            # Try another pattern for course recommendations
+            if not course_recommendations and "Recommended Courses" in analysis_text:
+                recommendations_section = analysis_text.split("Recommended Courses")[1]
+                if "##" in recommendations_section:
+                    recommendations_section = recommendations_section.split("##")[0]
+                
+                # Extract lines that look like list items
+                for line in recommendations_section.split("\n"):
+                    line = line.strip()
+                    if line and ":" in line and not line.startswith("#"):
+                        course_recommendations.append(clean_markdown(line))
+            
+            content.append(Paragraph("Recommended Courses & Certifications", subheading_style))
+            
+            if course_recommendations:
+                # Create a table for course recommendations with better formatting
+                course_data = [["Recommended Courses & Certifications"]]  # Add header row
+                
+                for course in course_recommendations:
+                    # Clean the course text and ensure it doesn't have any markdown formatting
+                    cleaned_course = clean_markdown(course)
+                    course_data.append([Paragraph(f"• {cleaned_course}", list_item_style)])
+                
+                course_table = Table(course_data, colWidths=[6*inch])
+                course_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (0, 0), colors.lightblue),
+                    ('TEXTCOLOR', (0, 0), (0, 0), colors.black),
+                    ('ALIGN', (0, 0), (0, 0), 'CENTER'),  # Center the header
+                    ('ALIGN', (0, 1), (0, -1), 'LEFT'),   # Left-align the content
+                    ('FONTNAME', (0, 0), (0, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (0, 0), 12),
+                    ('BOTTOMPADDING', (0, 0), (0, 0), 10),
+                    ('GRID', (0, 0), (0, -1), 1, colors.black),
+                    ('VALIGN', (0, 0), (0, -1), 'TOP'),
+                ]))
+                
+                content.append(course_table)
+            else:
+                # If still no recommendations, add a text section instead of generic courses
+                content.append(Paragraph("Based on your resume and target role, consider the following types of courses and certifications:", normal_style))
+                content.append(Spacer(1, 0.1*inch))
+                
+                # Add role-specific recommendations based on job_role
+                role_specific_courses = []
+                if "data" in job_role.lower() or "scientist" in job_role.lower() or "analyst" in job_role.lower():
+                    role_specific_courses = [
+                        "Data Science Specialization (Coursera/edX)",
+                        "Machine Learning (Coursera/edX)",
+                        "Deep Learning Specialization (Coursera)",
+                        "Big Data Technologies (Cloud Provider Certifications)",
+                        "Statistical Modeling and Inference",
+                        "Data Visualization with Tableau/Power BI"
+                    ]
+                elif "developer" in job_role.lower() or "engineer" in job_role.lower() or "programming" in job_role.lower():
+                    role_specific_courses = [
+                        "Full Stack Web Development (Udemy/Coursera)",
+                        "Cloud Certifications (AWS/Azure/GCP)",
+                        "DevOps and CI/CD Pipelines",
+                        "Software Architecture and Design Patterns",
+                        "Agile and Scrum Methodologies",
+                        "Mobile App Development"
+                    ]
+                elif "security" in job_role.lower() or "cyber" in job_role.lower():
+                    role_specific_courses = [
+                        "Certified Information Systems Security Professional (CISSP)",
+                        "Certified Ethical Hacker (CEH)",
+                        "CompTIA Security+",
+                        "Offensive Security Certified Professional (OSCP)",
+                        "Cloud Security Certifications",
+                        "Security Operations and Incident Response"
+                    ]
+                else:
+                    # Generic professional development courses
+                    role_specific_courses = [
+                        "LinkedIn Learning - Professional Skills Development",
+                        "Coursera - Career Development Specialization",
+                        "Udemy - Job Interview Skills Training",
+                        "Project Management Professional (PMP)",
+                        "Leadership and Management Skills",
+                        "Technical Writing and Communication"
+                    ]
+                
+                # Create a table for role-specific courses
+                course_data = []
+                for course in role_specific_courses:
+                    course_data.append([Paragraph(f"• {clean_markdown(course)}", list_item_style)])
+                
+                course_table = Table(course_data, colWidths=[6*inch])
+                course_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (0, 0), colors.lightblue),
+                    ('TEXTCOLOR', (0, 0), (0, 0), colors.black),
+                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica'),
+                    ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
+                    ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                ]))
+                
+                content.append(course_table)
+            
+            content.append(Spacer(1, 0.2*inch))
+            
+            # Add footer with page numbers
+            def add_page_number(canvas, doc):
+                canvas.saveState()
+                canvas.setFont('Helvetica', 9)
+                page_num = canvas.getPageNumber()
+                text = f"Page {page_num}"
+                canvas.drawRightString(7.5*inch, 0.25*inch, text)
+                
+                # Add generation date at the bottom
+                canvas.setFont('Helvetica', 9)
+                date_text = f"Generated on: {datetime.datetime.now().strftime('%B %d, %Y')}"
+                canvas.drawString(0.5*inch, 0.25*inch, date_text)
+                
+                canvas.restoreState()
+            
+            # Build the PDF
+            doc.build(content, onFirstPage=add_page_number, onLaterPages=add_page_number)
+            
+            # Get the PDF from the buffer
+            buffer.seek(0)
+            return buffer
+        
+        except Exception as e:
+            st.error(f"Error generating simple PDF report: {str(e)}")
+            import traceback
+            st.code(traceback.format_exc())
+            return None 
 
 
