@@ -107,7 +107,7 @@ class ResumeAnalyzer:
         # Check for minimum content
         if len(text) < 300:
             score -= 30
-            deductions.append("Resume is too short!")
+            deductions.append("Resume is too short")
             
         # Check for section headers
         if not any(
@@ -115,19 +115,19 @@ class ResumeAnalyzer:
             for line in lines
         ):
             score -= 20
-            deductions.append("No clear section headers found!")
+            deductions.append("No clear section headers found")
             
         # Check for bullet points
         bullet_chars = ("•", "-", "*", "→", "‣", "·")
         if not any(line.strip().startswith(bullet_chars) for line in lines if line.strip()):
             score -= 20
-            deductions.append("No bullet points found for listing details!")
+            deductions.append("No bullet points found for listing details")
             
         # Check for consistent spacing
         if any(len(line.strip()) == 0 and len(next_line.strip()) == 0 
                for line, next_line in zip(lines[:-1], lines[1:])):
             score -= 15
-            deductions.append("Inconsistent spacing between sections!")
+            deductions.append("Inconsistent spacing between sections")
             
         # Check for contact information format
         contact_patterns = [
@@ -137,7 +137,7 @@ class ResumeAnalyzer:
         ]
         if not any(re.search(pattern, text) for pattern in contact_patterns):
             score -= 15
-            deductions.append("Missing or improperly formatted contact information!")
+            deductions.append("Missing or improperly formatted contact information")
             
         return max(0, score), deductions
     
@@ -496,7 +496,7 @@ class ResumeAnalyzer:
             
             experience_suggestions = []
             if not experience:
-                experience_suggestions.append("Add your work experience section!")
+                experience_suggestions.append("Add your work experience section")
             else:
                 has_dates = any(re.search(r"\b(19|20)\d{2}\b", exp) for exp in experience)
                 has_bullets = any(re.search(r"[•\-\*]", exp) for exp in experience)

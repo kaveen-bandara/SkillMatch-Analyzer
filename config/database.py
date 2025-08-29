@@ -289,8 +289,3 @@ def get_resume_stats():
     except Exception as e:
         print(f"❌ Error getting resume stats: {str(e)}")
         return None
-    
-
-if __name__ == "__main__":
-    db = get_database_connection()
-    print("Database object:", db)
