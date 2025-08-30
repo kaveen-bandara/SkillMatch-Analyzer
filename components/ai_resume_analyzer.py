@@ -1621,4 +1621,187 @@ class AIResumeAnalyzer:
             st.code(traceback.format_exc())
             return None 
 
-
+    def extract_skills_from_analysis(self, analysis_text):
+        """Extract skills from the analysis text"""
+        skills = []
+        
+        try:
+            if "Current Skills" in analysis_text:
+                skills_section = analysis_text.split("Current Skills")[1]
+                if "##" in skills_section:
+                    skills_section = skills_section.split("##")[0]
+                
+                for line in skills_section.split("\n"):
+                    if line.strip() and ("-" in line or "*" in line or "•" in line):
+                        skill = line.replace("-", "").replace("*", "").replace("•", "").strip()
+                        if skill:
+                            skills.append(skill)
+        except Exception as e:
+            st.warning(f"Error extracting skills: {str(e)}")
+        
+        return skills
+        
+    def extract_missing_skills_from_analysis(self, analysis_text):
+        """Extract missing skills from the analysis text"""
+        missing_skills = []
+        
+        try:
+            if "Missing Skills" in analysis_text:
+                missing_section = analysis_text.split("Missing Skills")[1]
+                if "##" in missing_section:
+                    missing_section = missing_section.split("##")[0]
+                
+                for line in missing_section.split("\n"):
+                    if line.strip() and ("-" in line or "*" in line or "•" in line):
+                        skill = line.replace("-", "").replace("*", "").replace("•", "").strip()
+                        if skill:
+                            missing_skills.append(skill)
+        except Exception as e:
+            st.warning(f"Error extracting missing skills: {str(e)}")
+        
+        return missing_skills
+    
+    def _extract_score_from_text(self, analysis_text):
+        """Extract the resume score from the analysis text"""
+        try:
+            # Look for the Resume Score section
+            if "## Resume Score" in analysis_text:
+                score_section = analysis_text.split("## Resume Score")[1].strip()
+                # Extract the first number found
+                score_match = re.search(r'Resume Score:\s*(\d{1,3})/100', score_section)
+                if score_match:
+                    score = int(score_match.group(1))
+                    # Ensure score is within valid range
+                    return max(0, min(score, 100))
+                
+                # Try another pattern if the first one doesn't match
+                score_match = re.search(r'\b(\d{1,3})\b', score_section)
+                if score_match:
+                    score = int(score_match.group(1))
+                    # Ensure score is within valid range
+                    return max(0, min(score, 100))
+            
+            # If no score found in Resume Score section, try to find it elsewhere
+            score_match = re.search(r'Resume Score:\s*(\d{1,3})/100', analysis_text)
+            if score_match:
+                score = int(score_match.group(1))
+                return max(0, min(score, 100))
+                
+            return 0
+        except Exception as e:
+            print(f"Error extracting score: {str(e)}")
+            return 0
+            
+    def _extract_ats_score_from_text(self, analysis_text):
+        """Extract the ATS score from the analysis text"""
+        try:
+            # Look for the ATS Score in the ATS Optimization Assessment section
+            if "## ATS Optimization Assessment" in analysis_text:
+                ats_section = analysis_text.split("## ATS Optimization Assessment")[1].split("##")[0].strip()
+                # Extract the score using regex
+                score_match = re.search(r'ATS Score:\s*(\d{1,3})/100', ats_section)
+                if score_match:
+                    score = int(score_match.group(1))
+                    # Ensure score is within valid range
+                    return max(0, min(score, 100))
+            return 0
+        except Exception as e:
+            print(f"Error extracting ATS score: {str(e)}")
+            return 0
+            
+    def analyze_resume(self, resume_text, job_role=None, role_info=None, model="Google Gemini"):
+        """
+        Analyze a resume using the specified AI model
+        
+        Parameters:
+        - resume_text: The text content of the resume
+        - job_role: The target job role
+        - role_info: Additional information about the job role
+        - model: The AI model to use ("Google Gemini" or "Anthropic Claude")
+        
+        Returns:
+        - Dictionary containing analysis results
+        """
+        import traceback
+        
+        try:
+            job_description = None
+            if role_info:
+                job_description = f"""
+                Role: {job_role}
+                Description: {role_info.get('description', '')}
+                Required Skills: {', '.join(role_info.get('required_skills', []))}
+                """
+            
+            # Choose the appropriate model for analysis
+            if model == "Google Gemini":
+                result = self.analyze_resume_with_gemini(resume_text, job_description, job_role)
+                model_used = "Google Gemini"
+            elif model == "Anthropic Claude":
+                result = self.analyze_resume_with_anthropic(resume_text, job_description, job_role)
+                # Get the actual model used from the result
+                model_used = result.get("model_used", "Anthropic Claude")
+            else:
+                # Default to Gemini if model not recognized
+                result = self.analyze_resume_with_gemini(resume_text, job_description, job_role)
+                model_used = "Google Gemini"
+            
+            # Process the result to extract structured information
+            analysis_text = result.get("analysis", "")
+            
+            # Extract strengths
+            strengths = []
+            if "## Key Strengths" in analysis_text:
+                strengths_section = analysis_text.split("## Key Strengths")[1].split("##")[0].strip()
+                strengths = [clean_markdown(s.strip().replace("- ", "").replace("* ", "").replace("• ", "")) 
+                            for s in strengths_section.split("\n") 
+                            if s.strip() and (s.strip().startswith("-") or s.strip().startswith("*") or s.strip().startswith("•"))]
+            
+            # Extract weaknesses/areas for improvement
+            weaknesses = []
+            if "## Areas for Improvement" in analysis_text:
+                weaknesses_section = analysis_text.split("## Areas for Improvement")[1].split("##")[0].strip()
+                weaknesses = [clean_markdown(w.strip().replace("- ", "").replace("* ", "").replace("• ", "")) 
+                             for w in weaknesses_section.split("\n") 
+                             if w.strip() and (w.strip().startswith("-") or w.strip().startswith("*") or w.strip().startswith("•"))]
+            
+            # Extract suggestions/recommendations
+            suggestions = []
+            if "## Recommended Courses" in analysis_text:
+                suggestions_section = analysis_text.split("## Recommended Courses")[1].split("##")[0].strip()
+                suggestions = [clean_markdown(s.strip().replace("- ", "").replace("* ", "").replace("• ", "")) 
+                                 for s in suggestions_section.split("\n") 
+                                 if s.strip() and (s.strip().startswith("-") or s.strip().startswith("*") or s.strip().startswith("•"))]
+            
+            # Extract score
+            score = result.get("resume_score", 0)
+            if not score:
+                score = self._extract_score_from_text(analysis_text)
+            
+            # Extract ATS score
+            ats_score = self._extract_ats_score_from_text(analysis_text)
+            
+            # Return structured analysis
+            return {
+                "score": score,
+                "ats_score": ats_score,
+                "strengths": strengths,
+                "weaknesses": weaknesses,
+                "suggestions": suggestions,
+                "full_response": analysis_text,
+                "model_used": model_used
+            }
+            
+        except Exception as e:
+            print(f"Error in analyze_resume: {str(e)}")
+            print(traceback.format_exc())
+            return {
+                "error": f"Analysis failed: {str(e)}",
+                "score": 0,
+                "ats_score": 0,
+                "strengths": ["Unable to analyze resume due to an error."],
+                "weaknesses": ["Unable to analyze resume due to an error."],
+                "suggestions": ["Try again with a different model or check your resume format."],
+                "full_response": f"Error: {str(e)}",
+                "model_used": "Error"
+            } 
