@@ -1,18 +1,30 @@
-"""
 import datetime
 import google.generativeai as genai
 import io
 import math
 import os
+import pdfplumber
 import pypdf
 import pytesseract
 import random
+import re
+import streamlit as st
+import tempfile
 import traceback
 import warnings
 from docx import Document
 from dotenv import load_dotenv
 from pdf2image import convert_from_path
-"""
+from reportlab.graphics.charts.barcharts import VerticalBarChart
+from reportlab.graphics.charts.legends import Legend
+from reportlab.graphics.charts.linecharts import HorizontalLineChart
+from reportlab.graphics.charts.piecharts import Pie
+from reportlab.graphics.shapes import Drawing, Rect, String, Line
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, Flowable, KeepTogether
 
 class AIResumeAnalyzer:
     def __init__(self):
@@ -167,7 +179,7 @@ class AIResumeAnalyzer:
             return {"error": "Google API key is not configured. Please add it to your .env file."}
         
         try:
-            model = genai.GenerativeModel("gemini-1.5-flash")
+            model = genai.GenerativeModel("gemini-2.0-flash")
             
             base_prompt = f"""
             You are an expert resume analyst with deep knowledge of industry standards, job requirements, and hiring practices across various fields. Your task is to provide a comprehensive, detailed analysis of the resume provided.
@@ -212,7 +224,6 @@ class AIResumeAnalyzer:
             
             if job_role:
                 base_prompt += f"""
-                
                 The candidate is targeting a role as: {job_role}
                 
                 ## Role Alignment Analysis
@@ -221,7 +232,6 @@ class AIResumeAnalyzer:
             
             if job_description:
                 base_prompt += f"""
-                
                 Additionally, compare this resume to the following job description:
                 
                 Job Description:
@@ -235,13 +245,16 @@ class AIResumeAnalyzer:
                 """
             
             response = model.generate_content(base_prompt)
-            analysis = response.text.strip()
             
-            # Extract resume score if present
-            resume_score = self._extract_score_from_text(analysis)
+            # Handle response safely
+            analysis = getattr(response, "text", None)
+            if not analysis:
+                return {"error": "Gemini returned no analysis text."}
+            analysis = analysis.strip()
             
-            # Extract ATS score if present
-            ats_score = self._extract_ats_score_from_text(analysis)
+            # Extract scores
+            resume_score = self.extract_score_from_text(analysis)
+            ats_score = self.extract_ats_score_from_text(analysis)
             
             return {
                 "analysis": analysis,
@@ -257,44 +270,24 @@ class AIResumeAnalyzer:
         Generate a PDF report of the analysis
         """
         try:
-            try:
-                from reportlab.lib.pagesizes import letter
-                from reportlab.lib import colors
-                from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, Flowable, KeepTogether
-                from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-                from reportlab.lib.units import inch
-                from reportlab.graphics.shapes import Drawing, Rect, String, Line
-                from reportlab.graphics.charts.piecharts import Pie
-                from reportlab.graphics.charts.barcharts import VerticalBarChart
-                from reportlab.graphics.charts.linecharts import HorizontalLineChart
-                from reportlab.graphics.charts.legends import Legend
-            except ImportError as e:
-                st.error(f"Error importing PDF libraries: {str(e)}")
-                st.info("Please make sure reportlab is installed: pip install reportlab")
-                return self.simple_generate_pdf_report(analysis_result, candidate_name, job_role)
-            
             # Helper function to clean markdown formatting
             def clean_markdown(text):
                 if not text:
                     return ""
                 
-                # Remove markdown formatting for bold and italic
-                text = re.sub(r"\*\*(.*?)\*\*", r"\1", text)  # Remove ** for bold
-                text = re.sub(r"\*(.*?)\*", r"\1", text)      # Remove * for italic
-                text = re.sub(r"__(.*?)__", r"\1", text)      # Remove __ for bold
-                text = re.sub(r"_(.*?)_", r"\1", text)        # Remove _ for italic
-                
-                # Remove markdown formatting for headers
-                text = re.sub(r"^#{1,6}\s+", "", text, flags=re.MULTILINE)
-                
-                # Remove markdown formatting for links
-                text = re.sub(r"\[(.*?)\]\(.*?\)", r"\1", text)
-                
+                # Remove markdown formatting for bold, italic, headers and links
+                text = re.sub(r"\*\*(.*?)\*\*", r"\1", text) # Remove ** for bold
+                text = re.sub(r"\*(.*?)\*", r"\1", text) # Remove * for italic
+                text = re.sub(r"__(.*?)__", r"\1", text) # Remove __ for bold
+                text = re.sub(r"_(.*?)_", r"\1", text) # Remove _ for italic
+                text = re.sub(r"^#{1,6}\s+", "", text, flags=re.MULTILINE) # Remove fore headers
+                text = re.sub(r"\[(.*?)\]\(.*?\)", r"\1", text) # Remove for links
+                    
                 return text.strip()
-            
+                
             # Validate input data
             if not analysis_result:
-                st.error("No analysis result provided for PDF generation")
+                st.error("No analysis result provided for PDF generation.")
                 return None
                 
             # Print debug info
@@ -1066,48 +1059,29 @@ class AIResumeAnalyzer:
             buffer.seek(0)
             return buffer
         
-        except Exception as e:
-            st.error(f"Error generating simple PDF report: {str(e)}")
-            st.code(traceback.format_exc())
-            return None
-        
+        except ImportError as e:
+            st.error(f"Error importing PDF libraries: {str(e)}")
+            st.info("Please make sure reportlab is installed: pip install reportlab")
+            return self.simple_generate_pdf_report(analysis_result, candidate_name, job_role)
+
     def simple_generate_pdf_report(self, analysis_result, candidate_name, job_role):
-        """Generate a simple PDF report without complex charts as a fallback"""
+        """
+        Generate a simple PDF report without complex charts as a fallback
+        """
         try:
-            # Import required libraries
-            try:
-                from reportlab.lib.pagesizes import letter
-                from reportlab.lib import colors
-                from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, Flowable, KeepTogether
-                from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-                from reportlab.lib.units import inch
-                from reportlab.graphics.shapes import Drawing, Rect, String, Line
-                from reportlab.graphics.charts.piecharts import Pie
-                from reportlab.graphics.charts.barcharts import VerticalBarChart
-                from reportlab.graphics.charts.linecharts import HorizontalLineChart
-                from reportlab.graphics.charts.legends import Legend
-            except ImportError as e:
-                st.error(f"Error importing PDF libraries: {str(e)}")
-                st.info("Please make sure reportlab is installed: pip install reportlab")
-                return None
-            
             # Helper function to clean markdown formatting
             def clean_markdown(text):
                 if not text:
                     return ""
                 
-                # Remove markdown formatting for bold and italic
-                text = re.sub(r"\*\*(.*?)\*\*", r"\1", text)  # Remove ** for bold
-                text = re.sub(r"\*(.*?)\*", r"\1", text)      # Remove * for italic
-                text = re.sub(r"__(.*?)__", r"\1", text)      # Remove __ for bold
-                text = re.sub(r"_(.*?)_", r"\1", text)        # Remove _ for italic
-                
-                # Remove markdown formatting for headers
-                text = re.sub(r"^#{1,6}\s+", "", text, flags=re.MULTILINE)
-                
-                # Remove markdown formatting for links
-                text = re.sub(r"\[(.*?)\]\(.*?\)", r"\1", text)
-                
+                # Remove markdown formatting for bold, italic, headers and links
+                text = re.sub(r"\*\*(.*?)\*\*", r"\1", text) # Remove ** for bold
+                text = re.sub(r"\*(.*?)\*", r"\1", text) # Remove * for italic
+                text = re.sub(r"__(.*?)__", r"\1", text) # Remove __ for bold
+                text = re.sub(r"_(.*?)_", r"\1", text) # Remove _ for italic
+                text = re.sub(r"^#{1,6}\s+", "", text, flags=re.MULTILINE) # Remove fore headers
+                text = re.sub(r"\[(.*?)\]\(.*?\)", r"\1", text) # Remove for links
+                    
                 return text.strip()
             
             # Validate input data
@@ -1392,6 +1366,53 @@ class AIResumeAnalyzer:
             content.append(Paragraph("Key Strengths and Areas for Improvement", subheading_style))
             content.append(Spacer(1, 0.1*inch))
 
+            # Extract key sections for the executive summary
+            strengths = analysis_result.get("strengths", [])
+            weaknesses = analysis_result.get("weaknesses", [])
+            
+            # If strengths and weaknesses are not in the structured data, try to extract from text
+            if not strengths:
+                if "## Key Strengths" in analysis_text:
+                    strengths_section = analysis_text.split("## Key Strengths")[1].split("##")[0].strip()
+                    strengths = [clean_markdown(s.strip().replace("- ", "").replace("* ", "").replace("• ", "")) 
+                                for s in strengths_section.split("\n") 
+                                if s.strip() and (s.strip().startswith("-") or s.strip().startswith("*") or s.strip().startswith("•"))]
+                
+                # Try another pattern for strengths
+                if not strengths and "Key Strengths" in analysis_text:
+                    strengths_section = analysis_text.split("Key Strengths")[1]
+                    if "Areas for Improvement" in strengths_section:
+                        strengths_section = strengths_section.split("Areas for Improvement")[0]
+                    
+                    # Extract lines that look like list items
+                    for line in strengths_section.split("\n"):
+                        line = line.strip()
+                        if line and (line.startswith("-") or line.startswith("*") or line.startswith("•")):
+                            strengths.append(clean_markdown(line.replace("- ", "").replace("* ", "").replace("• ", "")))
+                        elif line and ":" in line and not line.startswith("#"):
+                            strengths.append(clean_markdown(line))
+
+            if not weaknesses:
+                if "## Areas for Improvement" in analysis_text:
+                    weaknesses_section = analysis_text.split("## Areas for Improvement")[1].split("##")[0].strip()
+                    weaknesses = [clean_markdown(w.strip().replace("- ", "").replace("* ", "").replace("• ", "")) 
+                                 for w in weaknesses_section.split("\n") 
+                                 if w.strip() and (w.strip().startswith("-") or w.strip().startswith("*") or w.strip().startswith("•"))]
+                
+                # Try another pattern for weaknesses
+                if not weaknesses and "Areas for Improvement" in analysis_text:
+                    weaknesses_section = analysis_text.split("Areas for Improvement")[1]
+                    if "##" in weaknesses_section:
+                        weaknesses_section = weaknesses_section.split("##")[0]
+                    
+                    # Extract lines that look like list items
+                    for line in weaknesses_section.split("\n"):
+                        line = line.strip()
+                        if line and (line.startswith("-") or line.startswith("*") or line.startswith("•")):
+                            weaknesses.append(clean_markdown(line.replace("- ", "").replace("* ", "").replace("• ", "")))
+                        elif line and ":" in line and not line.startswith("#"):
+                            weaknesses.append(clean_markdown(line))
+
             if strengths or weaknesses:
                 # Create data for strengths and weaknesses
                 sw_data = [["Key Strengths", "Areas for Improvement"]]
@@ -1587,55 +1608,61 @@ class AIResumeAnalyzer:
             buffer.seek(0)
             return buffer
         
-        except Exception as e:
-            st.error(f"Error generating simple PDF report: {str(e)}")
-            st.code(traceback.format_exc())
-            return None 
-
+        except ImportError as e:
+            st.error(f"Error importing PDF libraries: {str(e)}")
+            st.info("Please make sure reportlab is installed: pip install reportlab")
+            return None
+            
     def extract_skills_from_analysis(self, analysis_text):
-        """Extract skills from the analysis text"""
+        """
+        Extract skills from the analysis text
+        """
         skills = []
         
         try:
-            if "Current Skills" in analysis_text:
+            lower_text = analysis_text.lower()
+            if "Current Skills" in lower_text:
                 skills_section = analysis_text.split("Current Skills")[1]
                 if "##" in skills_section:
                     skills_section = skills_section.split("##")[0]
                 
                 for line in skills_section.split("\n"):
-                    if line.strip() and ("-" in line or "*" in line or "•" in line):
-                        skill = line.replace("-", "").replace("*", "").replace("•", "").strip()
-                        if skill:
-                            skills.append(skill)
+                    skill = re.sub(r"^[-*•]\s*", "", line).strip()
+                    if skill:
+                        skills.append(skill)
         except Exception as e:
             st.warning(f"Error extracting skills: {str(e)}")
         
         return skills
         
     def extract_missing_skills_from_analysis(self, analysis_text):
-        """Extract missing skills from the analysis text"""
+        """
+        Extract missing skills from the analysis text
+        """
         missing_skills = []
         
         try:
-            if "Missing Skills" in analysis_text:
+            lower_text = analysis_text.lower()
+            if "Missing Skills" in lower_text:
                 missing_section = analysis_text.split("Missing Skills")[1]
                 if "##" in missing_section:
                     missing_section = missing_section.split("##")[0]
                 
                 for line in missing_section.split("\n"):
-                    if line.strip() and ("-" in line or "*" in line or "•" in line):
-                        skill = line.replace("-", "").replace("*", "").replace("•", "").strip()
-                        if skill:
-                            missing_skills.append(skill)
+                    skill = re.sub(r"^[-*•]\s*", "", line).strip()
+                    if skill:
+                        missing_skills.append(skill)
         except Exception as e:
             st.warning(f"Error extracting missing skills: {str(e)}")
         
         return missing_skills
     
-    def _extract_score_from_text(self, analysis_text):
-        """Extract the resume score from the analysis text"""
+    def extract_score_from_text(self, analysis_text):
+        """
+        Extract the resume score from the analysis text
+        """
         try:
-            # Look for the Resume Score section
+            # Search for the Resume Score section
             if "## Resume Score" in analysis_text:
                 score_section = analysis_text.split("## Resume Score")[1].strip()
                 # Extract the first number found
@@ -1663,7 +1690,7 @@ class AIResumeAnalyzer:
             print(f"Error extracting score: {str(e)}")
             return 0
             
-    def _extract_ats_score_from_text(self, analysis_text):
+    def extract_ats_score_from_text(self, analysis_text):
         """Extract the ATS score from the analysis text"""
         try:
             # Look for the ATS Score in the ATS Optimization Assessment section
@@ -1679,19 +1706,10 @@ class AIResumeAnalyzer:
         except Exception as e:
             print(f"Error extracting ATS score: {str(e)}")
             return 0
-            
+    
     def analyze_resume(self, resume_text, job_role=None, role_info=None, model="Google Gemini"):
         """
         Analyze a resume using the specified AI model
-        
-        Parameters:
-        - resume_text: The text content of the resume
-        - job_role: The target job role
-        - role_info: Additional information about the job role
-        - model: The AI model to use ("Google Gemini" or "Anthropic Claude")
-        
-        Returns:
-        - Dictionary containing analysis results
         """        
         try:
             job_description = None
@@ -1718,6 +1736,21 @@ class AIResumeAnalyzer:
             # Process the result to extract structured information
             analysis_text = result.get("analysis", "")
             
+            # Helper function to clean markdown formatting
+            def clean_markdown(text):
+                if not text:
+                    return ""
+                
+                # Remove markdown formatting for bold, italic, headers and links
+                text = re.sub(r"\*\*(.*?)\*\*", r"\1", text) # Remove ** for bold
+                text = re.sub(r"\*(.*?)\*", r"\1", text) # Remove * for italic
+                text = re.sub(r"__(.*?)__", r"\1", text) # Remove __ for bold
+                text = re.sub(r"_(.*?)_", r"\1", text) # Remove _ for italic
+                text = re.sub(r"^#{1,6}\s+", "", text, flags=re.MULTILINE) # Remove fore headers
+                text = re.sub(r"\[(.*?)\]\(.*?\)", r"\1", text) # Remove for links
+                    
+                return text.strip()
+
             # Extract strengths
             strengths = []
             if "## Key Strengths" in analysis_text:
@@ -1745,10 +1778,10 @@ class AIResumeAnalyzer:
             # Extract score
             score = result.get("resume_score", 0)
             if not score:
-                score = self._extract_score_from_text(analysis_text)
+                score = self.extract_score_from_text(analysis_text)
             
             # Extract ATS score
-            ats_score = self._extract_ats_score_from_text(analysis_text)
+            ats_score = self.extract_ats_score_from_text(analysis_text)
             
             # Return structured analysis
             return {
