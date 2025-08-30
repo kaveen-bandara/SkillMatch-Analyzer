@@ -1805,3 +1805,147 @@ class AIResumeAnalyzer:
                 "full_response": f"Error: {str(e)}",
                 "model_used": "Error"
             } 
+
+    def process_sections(self, analysis_text, content, normal_style, list_item_style, subheading_style, heading_style, clean_markdown):
+        """Process sections of the analysis text with special handling for certain sections"""
+        # Parse the markdown-like content
+        sections = analysis_text.split("##")
+        
+        # Define sections to include in detailed analysis
+        detailed_sections = [
+            "Professional Profile Analysis",
+            "Skills Analysis",
+            "Experience Analysis",
+            "Education Analysis",
+            "ATS Optimization Assessment",
+            "Role Alignment Analysis",
+            "Job Match Analysis"
+        ]
+        
+        # Add Detailed Analysis section
+        content.append(Paragraph("Detailed Analysis", heading_style))
+        content.append(Spacer(1, 0.1*inch))
+        
+        for section in sections:
+            if not section.strip():
+                continue
+            
+            # Extract section title and content
+            lines = section.strip().split("\n")
+            section_title = lines[0].strip()
+            
+            # Skip sections we don't want in the detailed analysis
+            if section_title not in detailed_sections and section_title != "Overall Assessment":
+                continue
+            
+            # Skip Overall Assessment as we've already included it
+            if section_title == "Overall Assessment":
+                continue
+            
+            section_content = "\n".join(lines[1:]).strip()
+            
+            # Add section title
+            content.append(Paragraph(section_title, subheading_style))
+            content.append(Spacer(1, 0.1*inch))
+            
+            # Process content based on section
+            if section_title == "Skills Analysis":
+                # Extract current and missing skills
+                current_skills = []
+                missing_skills = []
+                
+                if "Current Skills" in section_content:
+                    current_part = section_content.split("Current Skills")[1]
+                    if "Missing Skills" in current_part:
+                        current_part = current_part.split("Missing Skills")[0]
+                    
+                    for line in current_part.split("\n"):
+                        if line.strip() and ("-" in line or "*" in line or "•" in line):
+                            skill = clean_markdown(line.replace("-", "").replace("*", "").replace("•", "").strip())
+                            if skill:
+                                current_skills.append(skill)
+                
+                if "Missing Skills" in section_content:
+                    missing_part = section_content.split("Missing Skills")[1]
+                    for line in missing_part.split("\n"):
+                        if line.strip() and ("-" in line or "*" in line or "•" in line):
+                            skill = clean_markdown(line.replace("-", "").replace("*", "").replace("•", "").strip())
+                            if skill:
+                                missing_skills.append(skill)
+                
+                # Create skills table with better formatting
+                if current_skills or missing_skills:
+                    # Create paragraphs for each skill to ensure proper wrapping
+                    current_skill_paragraphs = [Paragraph(skill, normal_style) for skill in current_skills]
+                    missing_skill_paragraphs = [Paragraph(skill, normal_style) for skill in missing_skills]
+                    
+                    # Make sure both lists have the same length
+                    max_len = max(len(current_skill_paragraphs), len(missing_skill_paragraphs))
+                    current_skill_paragraphs.extend([Paragraph("", normal_style)] * (max_len - len(current_skill_paragraphs)))
+                    missing_skill_paragraphs.extend([Paragraph("", normal_style)] * (max_len - len(missing_skill_paragraphs)))
+                    
+                    # Create data for the table
+                    data = [["Current Skills", "Missing Skills"]]
+                    for i in range(max_len):
+                        data.append([current_skill_paragraphs[i], missing_skill_paragraphs[i]])
+                    
+                    # Create the table with fixed column widths
+                    table = Table(data, colWidths=[3*inch, 3*inch])
+                    table.setStyle(TableStyle([
+                        ('BACKGROUND', (0, 0), (1, 0), colors.lightgreen),
+                        ('TEXTCOLOR', (0, 0), (1, 0), colors.black),
+                        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                        ('LEFTPADDING', (0, 0), (-1, -1), 10),
+                        ('RIGHTPADDING', (0, 0), (-1, -1), 10),
+                    ]))
+                    
+                    content.append(table)
+                
+                # We no longer need to add skill proficiency outside the table
+                # as it's now included in the table itself
+            elif section_title == "ATS Optimization Assessment":
+                # Special handling for ATS Optimization Assessment
+                ats_score_line = ""
+                ats_content = []
+                
+                # Extract ATS score if present
+                for line in section_content.split("\n"):
+                    if "ATS Score:" in line:
+                        ats_score_line = clean_markdown(line)
+                    elif line.strip():
+                        # Check if it's a list item
+                        if line.strip().startswith("-") or line.strip().startswith("*") or line.strip().startswith("•"):
+                            ats_content.append("• " + clean_markdown(line.strip()[1:].strip()))
+                        else:
+                            ats_content.append(clean_markdown(line))
+                
+                # Add ATS score line if found
+                if ats_score_line:
+                    content.append(Paragraph(ats_score_line, normal_style))
+                    content.append(Spacer(1, 0.1*inch))
+                
+                # Add the rest of the ATS content
+                for para in ats_content:
+                    if para.startswith("• "):
+                        content.append(Paragraph(para, list_item_style))
+                    else:
+                        content.append(Paragraph(para, normal_style))
+            else:
+                # Process regular paragraphs
+                paragraphs = section_content.split("\n")
+                for para in paragraphs:
+                    if para.strip():
+                        # Check if it's a list item
+                        if para.strip().startswith("-") or para.strip().startswith("*") or para.strip().startswith("•"):
+                            para = "• " + clean_markdown(para.strip()[1:].strip())
+                            content.append(Paragraph(para, list_item_style))
+                        else:
+                            content.append(Paragraph(clean_markdown(para), normal_style))
+            
+            content.append(Spacer(1, 0.2*inch))
+        
+        return content
