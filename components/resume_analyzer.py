@@ -1,6 +1,6 @@
-import re
-import PyPDF2
 import io
+import PyPDF2
+import re
 import traceback
 from docx import Document
 
@@ -107,7 +107,7 @@ class ResumeAnalyzer:
         # Check for minimum content
         if len(text) < 300:
             score -= 30
-            deductions.append("Resume is too short")
+            deductions.append("Your resume is too short.")
             
         # Check for section headers
         if not any(
@@ -115,19 +115,19 @@ class ResumeAnalyzer:
             for line in lines
         ):
             score -= 20
-            deductions.append("No clear section headers found")
+            deductions.append("No clear section headers found.")
             
         # Check for bullet points
         bullet_chars = ("•", "-", "*", "→", "‣", "·")
         if not any(line.strip().startswith(bullet_chars) for line in lines if line.strip()):
             score -= 20
-            deductions.append("No bullet points found for listing details")
+            deductions.append("No bullet points found for listing details.")
             
         # Check for consistent spacing
         if any(len(line.strip()) == 0 and len(next_line.strip()) == 0 
                for line, next_line in zip(lines[:-1], lines[1:])):
             score -= 15
-            deductions.append("Inconsistent spacing between sections")
+            deductions.append("Inconsistent spacing between sections.")
             
         # Check for contact information format
         contact_patterns = [
@@ -137,7 +137,7 @@ class ResumeAnalyzer:
         ]
         if not any(re.search(pattern, text) for pattern in contact_patterns):
             score -= 15
-            deductions.append("Missing or improperly formatted contact information")
+            deductions.append("Missing or improperly formatted contact information.")
             
         return max(0, score), deductions
     
@@ -449,7 +449,7 @@ class ResumeAnalyzer:
                     "keyword_match": {"score": 0, "found_skills": [], "missing_skills": []},
                     "section_score": 0,
                     "format_score": 0,
-                    "suggestions": [f"This appears to be a {doc_type} document. Please upload a resume for ATS analysis"]
+                    "suggestions": [f"This appears to be a {doc_type} document. Please upload a resume for ATS analysis."]
                 }
                 
             # Calculate keyword match
@@ -472,31 +472,31 @@ class ResumeAnalyzer:
             # -----------------------
             contact_suggestions = []
             if not personal_info.get("email"):
-                contact_suggestions.append("Add your email address")
+                contact_suggestions.append("Add your email address.")
             if not personal_info.get("phone"):
-                contact_suggestions.append("Add your phone number")
+                contact_suggestions.append("Add your phone number.")
             if not personal_info.get("linkedin"):
-                contact_suggestions.append("Add your LinkedIn profile URL")
+                contact_suggestions.append("Add your LinkedIn profile URL.")
             
             summary_suggestions = []
             if not summary:
-                summary_suggestions.append("Add a professional summary to highlight your key qualifications")
+                summary_suggestions.append("Add a professional summary to highlight your key qualifications.")
             elif len(summary.split()) < 30:
-                summary_suggestions.append("Expand your professional summary to better highlight your experience and goals")
+                summary_suggestions.append("Expand your professional summary to better highlight your experience and goals.")
             elif len(summary.split()) > 100:
-                summary_suggestions.append("Consider making your summary more concise (aim for 50-75 words)")
+                summary_suggestions.append("Consider making your summary more concise (aim for 50-75 words.)")
             
             skills_suggestions = []
             if not skills:
-                skills_suggestions.append("Add a dedicated skills section")
+                skills_suggestions.append("Add a dedicated skills section.")
             if len(skills) < 5:
-                skills_suggestions.append("List more relevant technical and soft skills")
+                skills_suggestions.append("List more relevant technical and soft skills.")
             if keyword_match["score"] < 70:
-                skills_suggestions.append("Add more skills that match the job requirements")
+                skills_suggestions.append("Add more skills that match the job requirements.")
             
             experience_suggestions = []
             if not experience:
-                experience_suggestions.append("Add your work experience section")
+                experience_suggestions.append("Add your work experience section.")
             else:
                 has_dates = any(re.search(r"\b(19|20)\d{2}\b", exp) for exp in experience)
                 has_bullets = any(re.search(r"[•\-\*]", exp) for exp in experience)
@@ -506,15 +506,15 @@ class ResumeAnalyzer:
                 )
                 
                 if not has_dates:
-                    experience_suggestions.append("Include dates for each work experience")
+                    experience_suggestions.append("Include dates for each work experience.")
                 if not has_bullets:
-                    experience_suggestions.append("Use bullet points to list your achievements and responsibilities")
+                    experience_suggestions.append("Use bullet points to list your achievements and responsibilities.")
                 if not has_action_verbs:
-                    experience_suggestions.append("Start bullet points with strong action verbs")
+                    experience_suggestions.append("Start bullet points with strong action verbs.")
             
             education_suggestions = []
             if not education:
-                education_suggestions.append("Add your educational background")
+                education_suggestions.append("Add your educational background.")
             else:
                 has_dates = any(re.search(r"\b(19|20)\d{2}\b", edu) for edu in education)
                 has_degree = any(
@@ -523,9 +523,9 @@ class ResumeAnalyzer:
                 has_gpa = any(re.search(r"\b(gpa|cgpa|grade|percentage)\b", edu.lower()) for edu in education)
                 
                 if not has_dates:
-                    education_suggestions.append("Include graduation dates")
+                    education_suggestions.append("Include your graduation dates.")
                 if not has_degree:
-                    education_suggestions.append("Specify your degree type")
+                    education_suggestions.append("Specify your degree type.")
                 if not has_gpa and job_requirements.get("require_gpa", False):
                     education_suggestions.append("Include your GPA if it's above 3.0")
             
@@ -563,7 +563,7 @@ class ResumeAnalyzer:
             )
             
             if not suggestions:
-                suggestions.append("Your resume is well-optimized for ATS systems")
+                suggestions.append("Your resume is well-optimized for ATS systems.")
             
             # -----------------------
             # Final structured result
@@ -609,5 +609,5 @@ class ResumeAnalyzer:
                 "keyword_match": {"score": 0, "found_skills": [], "missing_skills": []},
                 "section_score": 0,
                 "format_score": 0,
-                "suggestions": [f"Error analyzing resume: {str(e)}. Please check your file and try again"]
+                "suggestions": [f"Error analyzing resume: {str(e)}. Please check your file and try again."]
             }

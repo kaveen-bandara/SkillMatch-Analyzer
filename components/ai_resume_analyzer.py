@@ -1,76 +1,79 @@
-"""import os
-import pytesseract
-import pypdf
-import warnings
-import traceback
-import random
+"""
+import datetime
 import google.generativeai as genai
-from dotenv import load_dotenv
+import io
+import math
+import os
+import pypdf
+import pytesseract
+import random
+import traceback
+import warnings
 from docx import Document
-from pdf2image import convert_from_path"""
+from dotenv import load_dotenv
+from pdf2image import convert_from_path
+"""
 
 class AIResumeAnalyzer:
     def __init__(self):
         """
-        Initialize ai analyzer with API keys from environment variables
+        Initialize AI resume analyzer with API keys from environment variables
         """
         # Load environment variables
         load_dotenv()
 
-        # Configure Google Gemini AI
+        # Get API keys
         self.google_api_key = os.getenv("GOOGLE_API_KEY")
         self.openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
         
+        # Configure Google Gemini
         if self.google_api_key:
             genai.configure(api_key=self.google_api_key)
+        else:
+            raise ValueError("Google API key not found in environment variables.")
 
     def extract_text_from_pdf(self, pdf_file):
         """
-        Extract text from PDF using pdfplumber and OCR if needed
+        Extract text from PDF using multiple strategies:
+        1. pdfplumber (direct text extraction)
+        2. PyPDF2 (fallback method)
+        3. OCR via pdf2image + pytesseract (last resort for scanned PDFs)
         """
         text = ""
+        temp_path = None
         
-        # Save the uploaded file to a temporary file
+        # Save uploaded file to temp_path
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
             if hasattr(pdf_file, "getbuffer"):
                 temp_file.write(pdf_file.getbuffer())
             elif hasattr(pdf_file, "read"):
                 temp_file.write(pdf_file.read())
-                pdf_file.seek(0)  # Reset file pointer
+                pdf_file.seek(0)
             else:
-                # If it's already bytes
                 temp_file.write(pdf_file)
             temp_path = temp_file.name
         
         try:
-            # Try direct text extraction with pdfplumber
+            # Method 1: pdfplumber
             try:
                 with pdfplumber.open(temp_path) as pdf:
                     for page in pdf.pages:
-                        try:
-                            # Suppress specific warnings about PDFColorSpace conversion
                             with warnings.catch_warnings():
-                                warnings.filterwarnings("ignore", message=".*PDFColorSpace.*")
-                                warnings.filterwarnings("ignore", message=".*Cannot convert.*")
+                                warnings.filterwarnings("ignore", message=".*PDFColorSpace*")
+                                warnings.filterwarnings("ignore", message=".*Cannot convert*")
                                 page_text = page.extract_text()
                                 if page_text:
                                     text += page_text + "\n"
-                        except Exception as e:
-                            # Don't show these specific errors to the user
-                            if "PDFColorSpace" not in str(e) and "Cannot convert" not in str(e):
-                                st.warning(f"Error extracting text from page with pdfplumber: {e}")
             except Exception as e:
                 st.warning(f"pdfplumber extraction failed: {e}")
-            
-            # If pdfplumber extraction worked, return the text
+                        
             if text.strip():
-                os.unlink(temp_path)  # Clean up the temp file
-                return text.strip()
+                return text.strip()        
             
-            # Try PyPDF2 as a fallback
+            # Method 2: PyPDF2
             st.info("Trying PyPDF2 extraction method...")
+            pdf_text = ""
             try:
-                pdf_text = ""
                 with open(temp_path, "rb") as file:
                     pdf_reader = pypdf.PdfReader(file)
                     for page in pdf_reader.pages:
@@ -79,22 +82,16 @@ class AIResumeAnalyzer:
                             pdf_text += page_text + "\n"
                 
                 if pdf_text.strip():
-                    os.unlink(temp_path)  # Clean up the temp file
                     return pdf_text.strip()
             except Exception as e:
                 st.warning(f"PyPDF2 extraction failed: {e}")
             
-            # If we got here, both extraction methods failed
-            st.warning("Standard text extraction methods failed. Your PDF might be image-based or scanned.")
+            # Method 3: OCR
+            st.warning("Standard text extraction failed. Trying OCR (this may take some time)...")
             
-            # Try OCR as a last resort
-            try:                
-                st.info("Attempting OCR for image-based PDF. This may take a moment...")
-                
-                # Check if poppler is installed
+            try:                                
                 poppler_path = None
-                if os.name == "nt":  # Windows
-                    # Try to find poppler in common locations
+                if os.name == "nt":  # Windows-specific poppler check
                     possible_paths = [
                         r"C:\poppler\Library\bin",
                         r"C:\Program Files\poppler\bin",
@@ -104,78 +101,60 @@ class AIResumeAnalyzer:
                     for path in possible_paths:
                         if os.path.exists(path):
                             poppler_path = path
-                            st.success(f"Found Poppler at: {path}")
                             break
-                    
-                    if not poppler_path:
-                        st.warning("Poppler not found in common locations. Using default path: C:\\poppler\\Library\\bin")
-                        poppler_path = r"C:\poppler\Library\bin"
                 
-                # Try to convert PDF to images
-                try:
-                    if poppler_path and os.name == "nt":
-                        images = convert_from_path(temp_path, poppler_path=poppler_path)
-                    else:
-                        images = convert_from_path(temp_path)
+                images = convert_from_path(temp_path, poppler_path=poppler_path) if  poppler_path else convert_from_path(temp_path)
+            
+                ocr_text = ""
+                for i, image in enumerate(images):
+                    st.info(f"OCR processing page {i+1}...") 
+                    ocr_text += pytesseract.image_to_string(image) + "\n"
                     
-                    # Process each image with OCR
-                    ocr_text = ""
-                    for i, image in enumerate(images):
-                        st.info(f"Processing page {i+1} with OCR...")
-                        page_text = pytesseract.image_to_string(image)
-                        ocr_text += page_text + "\n"
-                    
-                    if ocr_text.strip():
-                        os.unlink(temp_path)  # Clean up the temp file
-                        return ocr_text.strip()
-                    else:
-                        st.error("OCR extraction yielded no text. Please check if the PDF contains actual text content.")
-                except Exception as e:
-                    st.error(f"PDF to image conversion failed: {e}")
-                    st.info("If you're on Windows, make sure Poppler is installed and in your PATH.")
-                    st.info("Download Poppler from: https://github.com/oschwartz10612/poppler-windows/releases/")
-            except ImportError as e:
-                st.error(f"OCR libraries not available: {e}")
-                st.info("Please install the required OCR libraries:")
-                st.code("pip install pytesseract pdf2image")
-                st.info("For Windows, also download and install:")
-                st.info("1. Tesseract OCR: https://github.com/UB-Mannheim/tesseract/wiki")
-                st.info("2. Poppler: https://github.com/oschwartz10612/poppler-windows/releases/")
+                if ocr_text.strip():
+                    return ocr_text.strip()
+                else:
+                    st.error("OCR extraction produced no text.")
+                
             except Exception as e:
-                st.error(f"OCR processing failed: {e}")
+                st.error(f"OCR failed: {e}")
+
+        finally:
+            # Ensure cleanup
+            if temp_path and os.path.exists(temp_path):
+                os.unlink(temp_path)
         
-        except Exception as e:
-            st.error(f"PDF processing failed: {e}")
-        
-        # Clean up the temp file
-        try:
-            os.unlink(temp_path)
-        except:
-            pass
-        
-        # If all extraction methods failed, return an empty string
-        st.error("All text extraction methods failed. Please try a different PDF or manually extract the text.")
+        st.error("All text extraction methods failed.")
         return ""
     
     def extract_text_from_docx(self, docx_file):
         """
         Extract text from DOCX file
-        """        
-        # Save the uploaded file to a temporary file
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as temp_file:
-            temp_file.write(docx_file.getbuffer())
-            temp_path = temp_file.name
-        
+        """
         text = ""
+        temp_path = None
+
+        # Save uploaded file to temp_path
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as temp_file:
+            if hasattr(docx_file, "getbuffer"):
+                temp_file.write(docx_file.getbuffer())
+            elif hasattr(docx_file, "read"):
+                temp_file.write(docx_file.read())
+                docx_file.seek(0)
+            else:
+                temp_file.write(docx_file)
+            temp_path = temp_file.name
+
         try:
             doc = Document(temp_path)
-            for para in doc.paragraphs:
-                text += para.text + "\n"
+            text = "\n".join(para.text for para in doc.paragraphs if para.text.strip())
         except Exception as e:
             st.error(f"Error extracting text from DOCX: {e}")
         
-        os.unlink(temp_path)  # Clean up the temp file
-        return text
+        finally:
+            if temp_path and os.path.exists(temp_path):
+                os.unlink(temp_path)
+
+        return text.strip()
 
     def analyze_resume_with_gemini(self, resume_text, job_description=None, job_role=None):
         """
@@ -289,9 +268,6 @@ class AIResumeAnalyzer:
                 from reportlab.graphics.charts.barcharts import VerticalBarChart
                 from reportlab.graphics.charts.linecharts import HorizontalLineChart
                 from reportlab.graphics.charts.legends import Legend
-                import io
-                import datetime
-                import math
             except ImportError as e:
                 st.error(f"Error importing PDF libraries: {str(e)}")
                 st.info("Please make sure reportlab is installed: pip install reportlab")
@@ -303,16 +279,16 @@ class AIResumeAnalyzer:
                     return ""
                 
                 # Remove markdown formatting for bold and italic
-                text = re.sub(r'\*\*(.*?)\*\*', r'\1', text)  # Remove ** for bold
-                text = re.sub(r'\*(.*?)\*', r'\1', text)      # Remove * for italic
-                text = re.sub(r'__(.*?)__', r'\1', text)      # Remove __ for bold
-                text = re.sub(r'_(.*?)_', r'\1', text)        # Remove _ for italic
+                text = re.sub(r"\*\*(.*?)\*\*", r"\1", text)  # Remove ** for bold
+                text = re.sub(r"\*(.*?)\*", r"\1", text)      # Remove * for italic
+                text = re.sub(r"__(.*?)__", r"\1", text)      # Remove __ for bold
+                text = re.sub(r"_(.*?)_", r"\1", text)        # Remove _ for italic
                 
                 # Remove markdown formatting for headers
-                text = re.sub(r'^#{1,6}\s+', '', text, flags=re.MULTILINE)
+                text = re.sub(r"^#{1,6}\s+", "", text, flags=re.MULTILINE)
                 
                 # Remove markdown formatting for links
-                text = re.sub(r'\[(.*?)\]\(.*?\)', r'\1', text)
+                text = re.sub(r"\[(.*?)\]\(.*?\)", r"\1", text)
                 
                 return text.strip()
             
@@ -335,8 +311,8 @@ class AIResumeAnalyzer:
             
             # Create custom styles
             title_style = ParagraphStyle(
-                'Title',
-                parent=styles['Heading1'],
+                "Title",
+                parent=styles["Heading1"],
                 fontSize=20,
                 textColor=colors.darkblue,
                 spaceAfter=12,
@@ -344,8 +320,8 @@ class AIResumeAnalyzer:
             )
             
             subtitle_style = ParagraphStyle(
-                'Subtitle',
-                parent=styles['Heading2'],
+                "Subtitle",
+                parent=styles["Heading2"],
                 fontSize=14,
                 textColor=colors.darkblue,
                 spaceAfter=12,
@@ -353,8 +329,8 @@ class AIResumeAnalyzer:
             )
             
             heading_style = ParagraphStyle(
-                'Heading',
-                parent=styles['Heading2'],
+                "Heading",
+                parent=styles["Heading2"],
                 fontSize=14,
                 textColor=colors.white,
                 spaceAfter=6,
@@ -367,8 +343,8 @@ class AIResumeAnalyzer:
             )
             
             subheading_style = ParagraphStyle(
-                'SubHeading',
-                parent=styles['Heading3'],
+                "SubHeading",
+                parent=styles["Heading3"],
                 fontSize=12,
                 textColor=colors.darkblue,
                 spaceAfter=6,
@@ -379,15 +355,15 @@ class AIResumeAnalyzer:
             )
             
             normal_style = ParagraphStyle(
-                'Normal',
-                parent=styles['Normal'],
+                "Normal",
+                parent=styles["Normal"],
                 fontSize=10,
                 spaceAfter=6,
                 leading=14  # Line spacing
             )
             
             list_item_style = ParagraphStyle(
-                'ListItem',
+                "ListItem",
                 parent=normal_style,
                 leftIndent=20,
                 firstLineIndent=-15,
@@ -466,18 +442,18 @@ class AIResumeAnalyzer:
                     # Draw score text
                     self.add(String(center_x, center_y - 25, f"{self._score}",
                                    fontSize=20, fillColor=self._color, 
-                                   textAnchor='middle', fontName='Helvetica-Bold'))
+                                   textAnchor="middle", fontName="Helvetica-Bold"))
                     
                     # Draw status text
                     self.add(String(center_x, center_y - 40, self._status,
                                    fontSize=12, fillColor=colors.black, 
-                                   textAnchor='middle'))
+                                   textAnchor="middle"))
                     
                     # Draw label
                     if self._label:
                         self.add(String(center_x, self.height - 15, self._label,
                                        fontSize=12, fillColor=colors.darkblue, 
-                                       textAnchor='middle', fontName='Helvetica-Bold'))
+                                       textAnchor="middle", fontName="Helvetica-Bold"))
                     
                     # Draw scale markers
                     for i in range(0, 101, 20):
@@ -487,7 +463,7 @@ class AIResumeAnalyzer:
                         
                         self.add(String(x, y, str(i),
                                        fontSize=8, fillColor=colors.black, 
-                                       textAnchor='middle'))
+                                       textAnchor="middle"))
             
             # Create a Circle class for the gauge
             class Circle(Rect):
@@ -563,26 +539,26 @@ class AIResumeAnalyzer:
                     # Draw combined score text
                     self.add(String(center_x, center_y - 25, f"{self._combined_score}",
                                    fontSize=24, fillColor=self._color, 
-                                   textAnchor='middle', fontName='Helvetica-Bold'))
+                                   textAnchor="middle", fontName="Helvetica-Bold"))
                     
                     # Draw status text
                     self.add(String(center_x, center_y - 45, self._status,
                                    fontSize=12, fillColor=colors.black, 
-                                   textAnchor='middle'))
+                                   textAnchor="middle"))
                     
                     # Draw individual scores
                     self.add(String(center_x - 60, center_y - 70, f"Resume: {self._resume_score}",
                                    fontSize=10, fillColor=colors.darkblue, 
-                                   textAnchor='middle'))
+                                   textAnchor="middle"))
                     
                     self.add(String(center_x + 60, center_y - 70, f"ATS: {self._ats_score}",
                                    fontSize=10, fillColor=colors.darkblue, 
-                                   textAnchor='middle'))
+                                   textAnchor="middle"))
                     
                     # Draw "Overall Score" label
                     self.add(String(center_x, self.height - 15, "Overall Score",
                                    fontSize=14, fillColor=colors.darkblue, 
-                                   textAnchor='middle', fontName='Helvetica-Bold'))
+                                   textAnchor="middle", fontName="Helvetica-Bold"))
                     
                     # Draw scale markers
                     for i in range(0, 101, 20):
@@ -592,7 +568,7 @@ class AIResumeAnalyzer:
                         
                         self.add(String(x, y, str(i),
                                        fontSize=8, fillColor=colors.black, 
-                                       textAnchor='middle'))
+                                       textAnchor="middle"))
             
             # Create the content
             content = []
@@ -615,11 +591,11 @@ class AIResumeAnalyzer:
             
             info_table = Table(info_data, colWidths=[1.5*inch, 5*inch])
             info_table.setStyle(TableStyle([
-                ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, -1), 12),
-                ('TEXTCOLOR', (0, 0), (0, -1), colors.darkblue),
-                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
+                ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, -1), 12),
+                ("TEXTCOLOR", (0, 0), (0, -1), colors.darkblue),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
             ]))
             
             content.append(info_table)
@@ -683,18 +659,18 @@ class AIResumeAnalyzer:
                 
                 # If still 0, try to extract from the analysis text
                 if resume_score == 0 and "Resume Score:" in analysis_text:
-                    score_match = re.search(r'Resume Score:\s*(\d{1,3})/100', analysis_text)
+                    score_match = re.search(r"Resume Score:\s*(\d{1,3})/100", analysis_text)
                     if score_match:
                         resume_score = int(score_match.group(1))
                     else:
                         # Try another pattern
-                        score_match = re.search(r'\bResume Score:\s*(\d{1,3})\b', analysis_text)
+                        score_match = re.search(r"\bResume Score:\s*(\d{1,3})\b", analysis_text)
                         if score_match:
                             resume_score = int(score_match.group(1))
                         else:
                             # Try to find any number after "Resume Score:"
                             score_section = analysis_text.split("Resume Score:")[1].split("\n")[0].strip()
-                            score_match = re.search(r'\b(\d{1,3})\b', score_section)
+                            score_match = re.search(r"\b(\d{1,3})\b", score_section)
                             if score_match:
                                 resume_score = int(score_match.group(1))
 
@@ -706,14 +682,14 @@ class AIResumeAnalyzer:
             model_used = analysis_result.get("model_used", "AI")
 
             # Add model used information
-            model_data = [["Analysis performed by:",model_used]]
+            model_data = [["Analysis performed by: ", model_used]]
             model_table = Table(model_data, colWidths=[1.9*inch, 5*inch])
             model_table.setStyle(TableStyle([
-                ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, -1), 12),
-                ('TEXTCOLOR', (0, 0), (0, -1), colors.darkblue),
-                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
+                ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, -1), 12),
+                ("TEXTCOLOR", (0, 0), (0, -1), colors.darkblue),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
             ]))
 
             content.append(model_table)
@@ -730,12 +706,12 @@ class AIResumeAnalyzer:
             ]
             score_table = Table(score_table_data, colWidths=[6*inch])
             score_table.setStyle(TableStyle([
-                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                ('FONTNAME', (0, 0), (0, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (0, 0), 14),
-                ('TEXTCOLOR', (0, 0), (0, 0), colors.darkblue),
-                ('BOTTOMPADDING', (0, 0), (0, 0), 10),
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("FONTNAME", (0, 0), (0, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (0, 0), 14),
+                ("TEXTCOLOR", (0, 0), (0, 0), colors.darkblue),
+                ("BOTTOMPADDING", (0, 0), (0, 0), 10),
             ]))
 
             content.append(score_table)
@@ -775,15 +751,15 @@ class AIResumeAnalyzer:
                 
                 sw_table = Table(sw_data, colWidths=[3*inch, 3*inch])
                 sw_table.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (0, 0), colors.lightgreen),
-                    ('BACKGROUND', (1, 0), (1, 0), colors.salmon),
-                    ('TEXTCOLOR', (0, 0), (1, 0), colors.black),
-                    ('ALIGN', (0, 0), (1, 0), 'CENTER'),
-                    ('FONTNAME', (0, 0), (1, 0), 'Helvetica-Bold'),
-                    ('FONTSIZE', (0, 0), (1, 0), 12),
-                    ('BOTTOMPADDING', (0, 0), (1, 0), 10),
-                    ('GRID', (0, 0), (1, -1), 1, colors.black),
-                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                    ("BACKGROUND", (0, 0), (0, 0), colors.lightgreen),
+                    ("BACKGROUND", (1, 0), (1, 0), colors.salmon),
+                    ("TEXTCOLOR", (0, 0), (1, 0), colors.black),
+                    ("ALIGN", (0, 0), (1, 0), "CENTER"),
+                    ("FONTNAME", (0, 0), (1, 0), "Helvetica-Bold"),
+                    ("FONTSIZE", (0, 0), (1, 0), 12),
+                    ("BOTTOMPADDING", (0, 0), (1, 0), 10),
+                    ("GRID", (0, 0), (1, -1), 1, colors.black),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
                 ]))
                 
                 content.append(sw_table)
@@ -798,15 +774,15 @@ class AIResumeAnalyzer:
                 ]
                 empty_table = Table(empty_data, colWidths=[3*inch, 3*inch])
                 empty_table.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (0, 0), colors.lightgreen),
-                    ('BACKGROUND', (1, 0), (1, 0), colors.salmon),
-                    ('TEXTCOLOR', (0, 0), (1, 0), colors.black),
-                    ('ALIGN', (0, 0), (1, 0), 'CENTER'),
-                    ('FONTNAME', (0, 0), (1, 0), 'Helvetica-Bold'),
-                    ('FONTSIZE', (0, 0), (1, 0), 12),
-                    ('BOTTOMPADDING', (0, 0), (1, 0), 10),
-                    ('GRID', (0, 0), (1, -1), 1, colors.black),
-                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                    ("BACKGROUND", (0, 0), (0, 0), colors.lightgreen),
+                    ("BACKGROUND", (1, 0), (1, 0), colors.salmon),
+                    ("TEXTCOLOR", (0, 0), (1, 0), colors.black),
+                    ("ALIGN", (0, 0), (1, 0), "CENTER"),
+                    ("FONTNAME", (0, 0), (1, 0), "Helvetica-Bold"),
+                    ("FONTSIZE", (0, 0), (1, 0), 12),
+                    ("BOTTOMPADDING", (0, 0), (1, 0), 10),
+                    ("GRID", (0, 0), (1, -1), 1, colors.black),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
                 ]))
                 
                 content.append(empty_table)
@@ -897,15 +873,15 @@ class AIResumeAnalyzer:
                         # Create the table with fixed column widths
                         table = Table(data, colWidths=[3*inch, 3*inch])
                         table.setStyle(TableStyle([
-                            ('BACKGROUND', (0, 0), (1, 0), colors.lightgreen),
-                            ('TEXTCOLOR', (0, 0), (1, 0), colors.black),
-                            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                            ('GRID', (0, 0), (-1, -1), 1, colors.black),
-                            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                            ('LEFTPADDING', (0, 0), (-1, -1), 10),
-                            ('RIGHTPADDING', (0, 0), (-1, -1), 10),
+                            ("BACKGROUND", (0, 0), (1, 0), colors.lightgreen),
+                            ("TEXTCOLOR", (0, 0), (1, 0), colors.black),
+                            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                            ("BOTTOMPADDING", (0, 0), (-1, 0), 12),
+                            ("GRID", (0, 0), (-1, -1), 1, colors.black),
+                            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                            ("LEFTPADDING", (0, 0), (-1, -1), 10),
+                            ("RIGHTPADDING", (0, 0), (-1, -1), 10),
                         ]))
                         
                         content.append(table)
@@ -992,15 +968,15 @@ class AIResumeAnalyzer:
                 
                 course_table = Table(course_data, colWidths=[6*inch])
                 course_table.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (0, 0), colors.lightblue),
-                    ('TEXTCOLOR', (0, 0), (0, 0), colors.black),
-                    ('ALIGN', (0, 0), (0, 0), 'CENTER'),  # Center the header
-                    ('ALIGN', (0, 1), (0, -1), 'LEFT'),   # Left-align the content
-                    ('FONTNAME', (0, 0), (0, 0), 'Helvetica-Bold'),
-                    ('FONTSIZE', (0, 0), (0, 0), 12),
-                    ('BOTTOMPADDING', (0, 0), (0, 0), 10),
-                    ('GRID', (0, 0), (0, -1), 1, colors.black),
-                    ('VALIGN', (0, 0), (0, -1), 'TOP'),
+                    ("BACKGROUND", (0, 0), (0, 0), colors.lightblue),
+                    ("TEXTCOLOR", (0, 0), (0, 0), colors.black),
+                    ("ALIGN", (0, 0), (0, 0), "CENTER"),  # Center the header
+                    ("ALIGN", (0, 1), (0, -1), "LEFT"),   # Left-align the content
+                    ("FONTNAME", (0, 0), (0, 0), "Helvetica-Bold"),
+                    ("FONTSIZE", (0, 0), (0, 0), 12),
+                    ("BOTTOMPADDING", (0, 0), (0, 0), 10),
+                    ("GRID", (0, 0), (0, -1), 1, colors.black),
+                    ("VALIGN", (0, 0), (0, -1), "TOP"),
                 ]))
                 
                 content.append(course_table)
@@ -1056,12 +1032,12 @@ class AIResumeAnalyzer:
                 
                 course_table = Table(course_data, colWidths=[6*inch])
                 course_table.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (0, 0), colors.lightblue),
-                    ('TEXTCOLOR', (0, 0), (0, 0), colors.black),
-                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica'),
-                    ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
-                    ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                    ("BACKGROUND", (0, 0), (0, 0), colors.lightblue),
+                    ("TEXTCOLOR", (0, 0), (0, 0), colors.black),
+                    ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica"),
+                    ("BOTTOMPADDING", (0, 0), (-1, 0), 10),
+                    ("GRID", (0, 0), (-1, -1), 1, colors.black),
                 ]))
                 
                 content.append(course_table)
@@ -1071,14 +1047,14 @@ class AIResumeAnalyzer:
             # Add footer with page numbers
             def add_page_number(canvas, doc):
                 canvas.saveState()
-                canvas.setFont('Helvetica', 9)
+                canvas.setFont("Helvetica", 9)
                 page_num = canvas.getPageNumber()
                 text = f"Page {page_num}"
                 canvas.drawRightString(7.5*inch, 0.25*inch, text)
                 
                 # Add generation date at the bottom
-                canvas.setFont('Helvetica', 9)
-                date_text = f"Generated on: {datetime.datetime.now().strftime('%B %d, %Y')}"
+                canvas.setFont("Helvetica", 9)
+                date_text = f"Generated on: {datetime.datetime.now().strftime("%B %d, %Y")}"
                 canvas.drawString(0.5*inch, 0.25*inch, date_text)
                 
                 canvas.restoreState()
@@ -1110,9 +1086,6 @@ class AIResumeAnalyzer:
                 from reportlab.graphics.charts.barcharts import VerticalBarChart
                 from reportlab.graphics.charts.linecharts import HorizontalLineChart
                 from reportlab.graphics.charts.legends import Legend
-                import io
-                import datetime
-                import math
             except ImportError as e:
                 st.error(f"Error importing PDF libraries: {str(e)}")
                 st.info("Please make sure reportlab is installed: pip install reportlab")
@@ -1124,16 +1097,16 @@ class AIResumeAnalyzer:
                     return ""
                 
                 # Remove markdown formatting for bold and italic
-                text = re.sub(r'\*\*(.*?)\*\*', r'\1', text)  # Remove ** for bold
-                text = re.sub(r'\*(.*?)\*', r'\1', text)      # Remove * for italic
-                text = re.sub(r'__(.*?)__', r'\1', text)      # Remove __ for bold
-                text = re.sub(r'_(.*?)_', r'\1', text)        # Remove _ for italic
+                text = re.sub(r"\*\*(.*?)\*\*", r"\1", text)  # Remove ** for bold
+                text = re.sub(r"\*(.*?)\*", r"\1", text)      # Remove * for italic
+                text = re.sub(r"__(.*?)__", r"\1", text)      # Remove __ for bold
+                text = re.sub(r"_(.*?)_", r"\1", text)        # Remove _ for italic
                 
                 # Remove markdown formatting for headers
-                text = re.sub(r'^#{1,6}\s+', '', text, flags=re.MULTILINE)
+                text = re.sub(r"^#{1,6}\s+", "", text, flags=re.MULTILINE)
                 
                 # Remove markdown formatting for links
-                text = re.sub(r'\[(.*?)\]\(.*?\)', r'\1', text)
+                text = re.sub(r"\[(.*?)\]\(.*?\)", r"\1", text)
                 
                 return text.strip()
             
@@ -1153,8 +1126,8 @@ class AIResumeAnalyzer:
             
             # Create custom styles
             title_style = ParagraphStyle(
-                'Title',
-                parent=styles['Heading1'],
+                "Title",
+                parent=styles["Heading1"],
                 fontSize=20,
                 textColor=colors.darkblue,
                 spaceAfter=12,
@@ -1162,8 +1135,8 @@ class AIResumeAnalyzer:
             )
             
             subtitle_style = ParagraphStyle(
-                'Subtitle',
-                parent=styles['Heading2'],
+                "Subtitle",
+                parent=styles["Heading2"],
                 fontSize=14,
                 textColor=colors.darkblue,
                 spaceAfter=12,
@@ -1171,8 +1144,8 @@ class AIResumeAnalyzer:
             )
             
             heading_style = ParagraphStyle(
-                'Heading',
-                parent=styles['Heading2'],
+                "Heading",
+                parent=styles["Heading2"],
                 fontSize=14,
                 textColor=colors.white,
                 spaceAfter=6,
@@ -1185,23 +1158,23 @@ class AIResumeAnalyzer:
             )
             
             subheading_style = ParagraphStyle(
-                'SubHeading',
-                parent=styles['Heading3'],
+                "SubHeading",
+                parent=styles["Heading3"],
                 fontSize=12,
                 textColor=colors.darkblue,
                 spaceAfter=6
             )
             
             normal_style = ParagraphStyle(
-                'Normal',
-                parent=styles['Normal'],
+                "Normal",
+                parent=styles["Normal"],
                 fontSize=10,
                 spaceAfter=6,
                 leading=14  # Line spacing
             )
             
             list_item_style = ParagraphStyle(
-                'ListItem',
+                "ListItem",
                 parent=normal_style,
                 leftIndent=20,
                 firstLineIndent=-15,
@@ -1313,7 +1286,6 @@ class AIResumeAnalyzer:
             
             # Format candidate name - if it's just "Candidate", add a number
             if not candidate_name or candidate_name.lower() == "candidate" or candidate_name.strip() == "":
-                import random
                 candidate_name = f"Candidate_{random.randint(1000, 9999)}"
             
             # Add candidate name and job role in a table
@@ -1324,11 +1296,11 @@ class AIResumeAnalyzer:
             
             info_table = Table(info_data, colWidths=[1.5*inch, 5*inch])
             info_table.setStyle(TableStyle([
-                ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, -1), 12),
-                ('TEXTCOLOR', (0, 0), (0, -1), colors.darkblue),
-                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
+                ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, -1), 12),
+                ("TEXTCOLOR", (0, 0), (0, -1), colors.darkblue),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
             ]))
             
             content.append(info_table)
@@ -1339,11 +1311,11 @@ class AIResumeAnalyzer:
             model_data = [["Analysis performed by:\u2003\u2003\u2003", "", model_used]]
             model_table = Table(model_data, colWidths=[3.5*inch, 1*inch, 5*inch])
             model_table.setStyle(TableStyle([
-                ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, -1), 12),
-                ('TEXTCOLOR', (0, 0), (0, -1), colors.darkblue),
-                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 20),
+                ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, -1), 12),
+                ("TEXTCOLOR", (0, 0), (0, -1), colors.darkblue),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 20),
             ]))
             
             content.append(model_table)
@@ -1361,18 +1333,18 @@ class AIResumeAnalyzer:
                 
                 # If still 0, try to extract from the analysis text
                 if resume_score == 0 and "Resume Score:" in analysis_text:
-                    score_match = re.search(r'Resume Score:\s*(\d{1,3})/100', analysis_text)
+                    score_match = re.search(r"Resume Score:\s*(\d{1,3})/100", analysis_text)
                     if score_match:
                         resume_score = int(score_match.group(1))
                     else:
                         # Try another pattern
-                        score_match = re.search(r'\bResume Score:\s*(\d{1,3})\b', analysis_text)
+                        score_match = re.search(r"\bResume Score:\s*(\d{1,3})\b", analysis_text)
                         if score_match:
                             resume_score = int(score_match.group(1))
                         else:
                             # Try to find any number after "Resume Score:"
                             score_section = analysis_text.split("Resume Score:")[1].split("\n")[0].strip()
-                            score_match = re.search(r'\b(\d{1,3})\b', score_section)
+                            score_match = re.search(r"\b(\d{1,3})\b", score_section)
                             if score_match:
                                 resume_score = int(score_match.group(1))
 
@@ -1388,12 +1360,12 @@ class AIResumeAnalyzer:
             
             score_table = Table(score_table_data, colWidths=[6*inch])
             score_table.setStyle(TableStyle([
-                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                ('FONTNAME', (0, 0), (0, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (0, 0), 14),
-                ('TEXTCOLOR', (0, 0), (0, 0), colors.darkblue),
-                ('BOTTOMPADDING', (0, 0), (0, 0), 10),
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("FONTNAME", (0, 0), (0, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (0, 0), 14),
+                ("TEXTCOLOR", (0, 0), (0, 0), colors.darkblue),
+                ("BOTTOMPADDING", (0, 0), (0, 0), 10),
             ]))
             
             content.append(score_table)
@@ -1437,15 +1409,15 @@ class AIResumeAnalyzer:
                 
                 sw_table = Table(sw_data, colWidths=[3*inch, 3*inch])
                 sw_table.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (0, 0), colors.lightgreen),
-                    ('BACKGROUND', (1, 0), (1, 0), colors.salmon),
-                    ('TEXTCOLOR', (0, 0), (1, 0), colors.black),
-                    ('ALIGN', (0, 0), (1, 0), 'CENTER'),
-                    ('FONTNAME', (0, 0), (1, 0), 'Helvetica-Bold'),
-                    ('FONTSIZE', (0, 0), (1, 0), 12),
-                    ('BOTTOMPADDING', (0, 0), (1, 0), 10),
-                    ('GRID', (0, 0), (1, -1), 1, colors.black),
-                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                    ("BACKGROUND", (0, 0), (0, 0), colors.lightgreen),
+                    ("BACKGROUND", (1, 0), (1, 0), colors.salmon),
+                    ("TEXTCOLOR", (0, 0), (1, 0), colors.black),
+                    ("ALIGN", (0, 0), (1, 0), "CENTER"),
+                    ("FONTNAME", (0, 0), (1, 0), "Helvetica-Bold"),
+                    ("FONTSIZE", (0, 0), (1, 0), 12),
+                    ("BOTTOMPADDING", (0, 0), (1, 0), 10),
+                    ("GRID", (0, 0), (1, -1), 1, colors.black),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
                 ]))
                 
                 content.append(sw_table)
@@ -1460,15 +1432,15 @@ class AIResumeAnalyzer:
                 ]
                 empty_table = Table(empty_data, colWidths=[3*inch, 3*inch])
                 empty_table.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (0, 0), colors.lightgreen),
-                    ('BACKGROUND', (1, 0), (1, 0), colors.salmon),
-                    ('TEXTCOLOR', (0, 0), (1, 0), colors.black),
-                    ('ALIGN', (0, 0), (1, 0), 'CENTER'),
-                    ('FONTNAME', (0, 0), (1, 0), 'Helvetica-Bold'),
-                    ('FONTSIZE', (0, 0), (1, 0), 12),
-                    ('BOTTOMPADDING', (0, 0), (1, 0), 10),
-                    ('GRID', (0, 0), (1, -1), 1, colors.black),
-                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                    ("BACKGROUND", (0, 0), (0, 0), colors.lightgreen),
+                    ("BACKGROUND", (1, 0), (1, 0), colors.salmon),
+                    ("TEXTCOLOR", (0, 0), (1, 0), colors.black),
+                    ("ALIGN", (0, 0), (1, 0), "CENTER"),
+                    ("FONTNAME", (0, 0), (1, 0), "Helvetica-Bold"),
+                    ("FONTSIZE", (0, 0), (1, 0), 12),
+                    ("BOTTOMPADDING", (0, 0), (1, 0), 10),
+                    ("GRID", (0, 0), (1, -1), 1, colors.black),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
                 ]))
                 
                 content.append(empty_table)
@@ -1517,15 +1489,15 @@ class AIResumeAnalyzer:
                 
                 course_table = Table(course_data, colWidths=[6*inch])
                 course_table.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (0, 0), colors.lightblue),
-                    ('TEXTCOLOR', (0, 0), (0, 0), colors.black),
-                    ('ALIGN', (0, 0), (0, 0), 'CENTER'),  # Center the header
-                    ('ALIGN', (0, 1), (0, -1), 'LEFT'),   # Left-align the content
-                    ('FONTNAME', (0, 0), (0, 0), 'Helvetica-Bold'),
-                    ('FONTSIZE', (0, 0), (0, 0), 12),
-                    ('BOTTOMPADDING', (0, 0), (0, 0), 10),
-                    ('GRID', (0, 0), (0, -1), 1, colors.black),
-                    ('VALIGN', (0, 0), (0, -1), 'TOP'),
+                    ("BACKGROUND", (0, 0), (0, 0), colors.lightblue),
+                    ("TEXTCOLOR", (0, 0), (0, 0), colors.black),
+                    ("ALIGN", (0, 0), (0, 0), "CENTER"),  # Center the header
+                    ("ALIGN", (0, 1), (0, -1), "LEFT"),   # Left-align the content
+                    ("FONTNAME", (0, 0), (0, 0), "Helvetica-Bold"),
+                    ("FONTSIZE", (0, 0), (0, 0), 12),
+                    ("BOTTOMPADDING", (0, 0), (0, 0), 10),
+                    ("GRID", (0, 0), (0, -1), 1, colors.black),
+                    ("VALIGN", (0, 0), (0, -1), "TOP"),
                 ]))
                 
                 content.append(course_table)
@@ -1581,12 +1553,12 @@ class AIResumeAnalyzer:
                 
                 course_table = Table(course_data, colWidths=[6*inch])
                 course_table.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (0, 0), colors.lightblue),
-                    ('TEXTCOLOR', (0, 0), (0, 0), colors.black),
-                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica'),
-                    ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
-                    ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                    ("BACKGROUND", (0, 0), (0, 0), colors.lightblue),
+                    ("TEXTCOLOR", (0, 0), (0, 0), colors.black),
+                    ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica"),
+                    ("BOTTOMPADDING", (0, 0), (-1, 0), 10),
+                    ("GRID", (0, 0), (-1, -1), 1, colors.black),
                 ]))
                 
                 content.append(course_table)
@@ -1596,14 +1568,14 @@ class AIResumeAnalyzer:
             # Add footer with page numbers
             def add_page_number(canvas, doc):
                 canvas.saveState()
-                canvas.setFont('Helvetica', 9)
+                canvas.setFont("Helvetica", 9)
                 page_num = canvas.getPageNumber()
                 text = f"Page {page_num}"
                 canvas.drawRightString(7.5*inch, 0.25*inch, text)
                 
                 # Add generation date at the bottom
-                canvas.setFont('Helvetica', 9)
-                date_text = f"Generated on: {datetime.datetime.now().strftime('%B %d, %Y')}"
+                canvas.setFont("Helvetica", 9)
+                date_text = f"Generated on: {datetime.datetime.now().strftime("%B %d, %Y")}"
                 canvas.drawString(0.5*inch, 0.25*inch, date_text)
                 
                 canvas.restoreState()
@@ -1617,7 +1589,6 @@ class AIResumeAnalyzer:
         
         except Exception as e:
             st.error(f"Error generating simple PDF report: {str(e)}")
-            import traceback
             st.code(traceback.format_exc())
             return None 
 
@@ -1668,21 +1639,21 @@ class AIResumeAnalyzer:
             if "## Resume Score" in analysis_text:
                 score_section = analysis_text.split("## Resume Score")[1].strip()
                 # Extract the first number found
-                score_match = re.search(r'Resume Score:\s*(\d{1,3})/100', score_section)
+                score_match = re.search(r"Resume Score:\s*(\d{1,3})/100", score_section)
                 if score_match:
                     score = int(score_match.group(1))
                     # Ensure score is within valid range
                     return max(0, min(score, 100))
                 
                 # Try another pattern if the first one doesn't match
-                score_match = re.search(r'\b(\d{1,3})\b', score_section)
+                score_match = re.search(r"\b(\d{1,3})\b", score_section)
                 if score_match:
                     score = int(score_match.group(1))
                     # Ensure score is within valid range
                     return max(0, min(score, 100))
             
             # If no score found in Resume Score section, try to find it elsewhere
-            score_match = re.search(r'Resume Score:\s*(\d{1,3})/100', analysis_text)
+            score_match = re.search(r"Resume Score:\s*(\d{1,3})/100", analysis_text)
             if score_match:
                 score = int(score_match.group(1))
                 return max(0, min(score, 100))
@@ -1699,7 +1670,7 @@ class AIResumeAnalyzer:
             if "## ATS Optimization Assessment" in analysis_text:
                 ats_section = analysis_text.split("## ATS Optimization Assessment")[1].split("##")[0].strip()
                 # Extract the score using regex
-                score_match = re.search(r'ATS Score:\s*(\d{1,3})/100', ats_section)
+                score_match = re.search(r"ATS Score:\s*(\d{1,3})/100", ats_section)
                 if score_match:
                     score = int(score_match.group(1))
                     # Ensure score is within valid range
@@ -1721,16 +1692,14 @@ class AIResumeAnalyzer:
         
         Returns:
         - Dictionary containing analysis results
-        """
-        import traceback
-        
+        """        
         try:
             job_description = None
             if role_info:
                 job_description = f"""
                 Role: {job_role}
-                Description: {role_info.get('description', '')}
-                Required Skills: {', '.join(role_info.get('required_skills', []))}
+                Description: {role_info.get("description", "")}
+                Required Skills: {", ".join(role_info.get("required_skills", []))}
                 """
             
             # Choose the appropriate model for analysis
@@ -1892,15 +1861,15 @@ class AIResumeAnalyzer:
                     # Create the table with fixed column widths
                     table = Table(data, colWidths=[3*inch, 3*inch])
                     table.setStyle(TableStyle([
-                        ('BACKGROUND', (0, 0), (1, 0), colors.lightgreen),
-                        ('TEXTCOLOR', (0, 0), (1, 0), colors.black),
-                        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                        ('GRID', (0, 0), (-1, -1), 1, colors.black),
-                        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                        ('LEFTPADDING', (0, 0), (-1, -1), 10),
-                        ('RIGHTPADDING', (0, 0), (-1, -1), 10),
+                        ("BACKGROUND", (0, 0), (1, 0), colors.lightgreen),
+                        ("TEXTCOLOR", (0, 0), (1, 0), colors.black),
+                        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                        ("BOTTOMPADDING", (0, 0), (-1, 0), 12),
+                        ("GRID", (0, 0), (-1, -1), 1, colors.black),
+                        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                        ("LEFTPADDING", (0, 0), (-1, -1), 10),
+                        ("RIGHTPADDING", (0, 0), (-1, -1), 10),
                     ]))
                     
                     content.append(table)
