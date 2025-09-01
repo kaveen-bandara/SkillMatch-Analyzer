@@ -54,11 +54,9 @@ class SkillMatchApp:
         # Define pages dictionary
         self.pages = {
             "🏠 HOME": self.render_home,
-            #"🔍 RESUME ANALYZER": self.render_analyzer,
-            #"📊 DASHBOARD": self.render_dashboard,
-            #"🎯 JOB SEARCH": self.render_job_search,
-            #"💬 FEEDBACK": self.render_feedback_page,
-            #"📖 ABOUT": self.render_about
+            "🔍 RESUME ANALYZER": self.render_analyzer,
+            "📊 DASHBOARD": self.render_dashboard,
+            "🎯 JOB SEARCH": self.render_job_search
         }
 
         # Initialize dashboard manager
@@ -1981,8 +1979,9 @@ class SkillMatchApp:
 
 
     def main(self):
-
-        """Main application entry point"""
+        """
+        Main application entry point
+        """
 
         self.render_home()
 
