@@ -15,9 +15,9 @@ def page_header(title, subtitle=None):
     Render a consistent page header with gradient background
     """
     st.markdown(f"""
-        <div class="page-header">
-            <h1 class="header-title">{title}</h1>
-            {f"<p class='header-subtitle'>{subtitle}</p>" if subtitle else ""}
+        <div>
+            <h1>{title}</h1>
+            {f"<p>{subtitle}</p>" if subtitle else ""}
         </div>
         """, unsafe_allow_html=True)
 
@@ -38,15 +38,12 @@ def hero_section(title, subtitle=None, description=None):
         </div>
         """, unsafe_allow_html=True)
 
-def feature_card(icon, title, description):
+def feature_card(title, description):
     """
     Render a modern feature card with hover effects
     """
     st.markdown(f"""
-        <div class="card feature-card">
-            <div class="feature-icon icon-pulse">
-                <i class="{icon}"></i>
-            </div>
+        <div>
             <h3>{title}</h3>
             <p>{description}</p>
         </div>

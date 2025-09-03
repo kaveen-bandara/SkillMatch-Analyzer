@@ -36,7 +36,6 @@ class AIResumeAnalyzer:
 
         # Get API keys
         self.google_api_key = os.getenv("GOOGLE_API_KEY")
-        self.openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
         
         # Configure Google Gemini
         if self.google_api_key:
@@ -1047,7 +1046,7 @@ class AIResumeAnalyzer:
                 
                 # Add generation date at the bottom
                 canvas.setFont("Helvetica", 9)
-                date_text = f"Generated on: {datetime.datetime.now().strftime("%B %d, %Y")}"
+                date_text = f"Generated on: {datetime.datetime.now().strftime('%B %d, %Y')}"
                 canvas.drawString(0.5*inch, 0.25*inch, date_text)
                 
                 canvas.restoreState()
@@ -1596,7 +1595,7 @@ class AIResumeAnalyzer:
                 
                 # Add generation date at the bottom
                 canvas.setFont("Helvetica", 9)
-                date_text = f"Generated on: {datetime.datetime.now().strftime("%B %d, %Y")}"
+                date_text = f"Generated on: {datetime.datetime.now().strftime('%B %d, %Y')}"
                 canvas.drawString(0.5*inch, 0.25*inch, date_text)
                 
                 canvas.restoreState()

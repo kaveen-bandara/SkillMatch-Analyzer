@@ -1,291 +1,508 @@
 import os
-from pymongo import MongoClient
+import psycopg2
 from dotenv import load_dotenv
-from bson import ObjectId
-from datetime import datetime
-
-# Create a global variable
-client = None
 
 # Load environment variables from .env
 load_dotenv()
 
 def get_database_connection():
     """
-    Create and return a MongoDB database connection
+    Create and return a PostgreSQL database connection
     """
-    global client
-    if client is None:
-        uri = os.getenv("MONGO_URI")
-        client = MongoClient(uri)
-    return client["skillmatch-smart-resume-analyzer"]
+    uri = os.getenv("POSTGRES_URI")
+    conn = psycopg2.connect(uri)
+    return conn
 
 def init_database():
     """
-    Initialize MongoDB collections with schema validation
+    Initialize PostgreSQL tables
     """
-    db = get_database_connection()
+    with get_database_connection() as conn:
+        with conn.cursor() as cursor:
+    
+            # Create resume_data table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS resume_data(
+                    id SERIAL PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    email TEXT NOT NULL,
+                    phone TEXT NOT NULL,
+                    linkedin TEXT,
+                    github TEXT,
+                    portfolio TEXT,
+                    summary TEXT,
+                    target_role TEXT,
+                    target_category TEXT,
+                    education TEXT,
+                    experience TEXT,
+                    projects TEXT,
+                    skills TEXT,
+                    template TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            
+            # Create resume_skills table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS resume_skills(
+                    id SERIAL PRIMARY KEY,
+                    resume_id INTEGER REFERENCES resume_data(id) ON DELETE CASCADE,
+                    skill_name TEXT NOT NULL,
+                    skill_category TEXT NOT NULL,
+                    proficiency_score REAL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            
+            # Create resume_analysis table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS resume_analysis(
+                    id SERIAL PRIMARY KEY,
+                    resume_id INTEGER REFERENCES resume_data(id) ON DELETE CASCADE,
+                    ats_score REAL,
+                    keyword_match_score REAL,
+                    format_score REAL,
+                    section_score REAL,
+                    missing_skills TEXT,
+                    recommendations TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            
+            # Create admin_logs table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS admin_logs(
+                    id SERIAL PRIMARY KEY,
+                    admin_email VARCHAR(255) NOT NULL,
+                    action TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            
+            # Create admin table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS admin(
+                    id SERIAL PRIMARY KEY,
+                    email VARCHAR(255) NOT NULL UNIQUE,
+                    password TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
 
-    # Define validation rules
-    collection_validations = {
-        "resume_data": {
-            "$jsonSchema": {
-                "bsonType": "object",
-                "required": ["name", "email", "phone"],
-                "properties": {
-                    "name": {"bsonType": "string"},
-                    "email": {"bsonType": "string"},
-                    "phone": {"bsonType": "string"},
-                    "linkedin": {"bsonType": ["string", "null"]},
-                    "github": {"bsonType": ["string", "null"]},
-                    "portfolio": {"bsonType": ["string", "null"]},
-                    "summary": {"bsonType": ["string", "null"]},
-                    "target_role": {"bsonType": ["string", "null"]},
-                    "target_category": {"bsonType": ["string", "null"]},
-                    "education": {"bsonType": ["array", "null"], "items": {"bsonType": "string"}},
-                    "experience": {"bsonType": ["array", "null"], "items": {"bsonType": "string"}},
-                    "projects": {"bsonType": ["array", "null"], "items": {"bsonType": "string"}},
-                    "skills": {"bsonType": ["array", "null"], "items": {"bsonType": "string"}},
-                    "template": {"bsonType": ["string", "null"]},
-                    "created_at": {"bsonType": "date"}
-                }
-            }
-        },
-        "resume_skills": {
-            "$jsonSchema": {
-                "bsonType": "object",
-                "required": ["resume_id", "skill_name", "skill_category"],
-                "properties": {
-                    "resume_id": {"bsonType": "objectId"},
-                    "skill_name": {"bsonType": "string"},
-                    "skill_category": {"bsonType": "string"},
-                    "proficiency_score": {"bsonType": ["double", "null"]},
-                    "created_at": {"bsonType": "date"}
-                }
-            }
-        },
-        "resume_analysis": {
-            "$jsonSchema": {
-                "bsonType": "object",
-                "required": ["resume_id"],
-                "properties": {
-                    "resume_id": {"bsonType": "objectId"},
-                    "ats_score": {"bsonType": ["double", "null"]},
-                    "keyword_match_score": {"bsonType": ["double", "null"]},
-                    "format_score": {"bsonType": ["double", "null"]},
-                    "section_score": {"bsonType": ["double", "null"]},
-                    "missing_skills": {"bsonType": ["string", "null"]},
-                    "recommendations": {"bsonType": ["string", "null"]},
-                    "created_at": {"bsonType": "date"}
-                }
-            }
-        },
-        "admin_logs": {
-            "$jsonSchema": {
-                "bsonType": "object",
-                "required": ["admin_email", "action"],
-                "properties": {
-                    "admin_email": {"bsonType": "string"},
-                    "action": {"bsonType": "string"},
-                    "created_at": {"bsonType": "date"}
-                }
-            }
-        },
-        "admin": {
-            "$jsonSchema": {
-                "bsonType": "object",
-                "required": ["email", "password"],
-                "properties": {
-                    "email": {"bsonType": "string"},
-                    "password": {"bsonType": "string"},
-                    "created_at": {"bsonType": "date"}
-                }
-            }
-        }
-    }
+            # Create ai_analysis table if it doesn't exist
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS ai_analysis(
+                    id SERIAL PRIMARY KEY,
+                    resume_id INTEGER REFERENCES resume_data(id) ON DELETE CASCADE,
+                    resume_score INTEGER,
+                    job_role TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
 
-    # Create collections with validation rules
-    for name, validator in collection_validations.items():
-        if name not in db.list_collection_names():
-            db.create_collection(name, validator={"$jsonSchema": validator["$jsonSchema"]})
-            print(f"✅ Created collection: {name}")
-        else:
-            db.command("collMod", name, validator={"$jsonSchema": validator["$jsonSchema"]})
-            print(f"🔄 Updated schema for: {name}")
-
-    # Admin email must be unique
-    db.admin.create_index([("email", 1)], unique=True, name="unique_admin_email")
-
-    # No duplicate skills for the same resume
-    db.resume_skills.create_index([("resume_id", 1), ("skill_name", 1)], unique=True, name="unique_resume_skill")
-
-    # One analysis per resume
-    db.resume_analysis.create_index([("resume_id", 1)], unique=True, name="unique_resume_analysis")
-
-    print(f"✅ MongoDB collections initialized with schema validation.")
-
-def insert_resume_data(data):
+def save_resume_data(data):
     """
-    Save resume data into resume_data collection
+    Save resume data to PostgreSQL database
     """
-    db = get_database_connection()
-
-    personal_info = data.get("personal_info", {})
-
-    resume_doc = {
-        "name": personal_info.get("full_name"),
-        "email": personal_info.get("email"),
-        "phone": personal_info.get("phone"),
-        "linkedin": personal_info.get("linkedin"),
-        "github": personal_info.get("github"),
-        "portfolio": personal_info.get("portfolio"),
-        "summary": data.get("summary"),
-        "target_role": data.get("target_role"),
-        "target_category": data.get("target_category"),
-        "education": data.get("education"),
-        "experience": data.get("experience"),
-        "projects": data.get("projects"),
-        "skills": data.get("skills"),
-        "template": data.get("template"),
-        "created_at": datetime.utcnow()
-    }
-
     try:
-        result = db.resume_data.insert_one(resume_doc)
-        print(f"✅ Resume saved successfully with id {result.inserted_id}")
-        return result.inserted_id
+        with get_database_connection() as conn:
+            with conn.cursor() as cursor:
+                personal_info = data.get("personal_info", {})
+
+                cursor.execute("""
+                    INSERT INTO resume_data (
+                        name, email, phone, linkedin, github, portfolio,
+                        summary, target_role, target_category, education, 
+                        experience, projects, skills, template
+                    ) 
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    RETURNING id
+                """, 
+                (
+                    personal_info.get("full_name", ""),
+                    personal_info.get("email", ""),
+                    personal_info.get("phone", ""),
+                    personal_info.get("linkedin", ""),
+                    personal_info.get("github", ""),
+                    personal_info.get("portfolio", ""),
+                    data.get("summary", ""),
+                    data.get("target_role", ""),
+                    data.get("target_category", ""),
+                    str(data.get("education", [])),
+                    str(data.get("experience", [])),
+                    str(data.get("projects", [])),
+                    str(data.get("skills", [])),
+                    data.get("template", "")
+                ))
+
+                # Get the inserted row's ID
+                resume_id = cursor.fetchone()[0]
+                return resume_id
+
     except Exception as e:
-        raise RuntimeError(f"Failed to save resume data: {e}")
+        print(f"Error saving resume data: {str(e)}")
+        return None
 
-def insert_resume_skill(skill):
+def save_analysis_data(resume_id, analysis):
     """
-    Insert resume skill into the resume_skills collection
+    Save resume analysis data to PostgreSQL
     """
-    db = get_database_connection()
-
-    # Validate and normalize resume_id
-    resume_id = skill.get("resume_id")
-    if isinstance(resume_id, ObjectId):
-        resume_obj_id = resume_id
-    elif resume_id and ObjectId.is_valid(str(resume_id)):
-        resume_obj_id = ObjectId(str(resume_id))
-    else:
-        raise ValueError("Invalid resume_id: must be a valid ObjectId!")
-
-    # Ensure the resume exists
-    if not db.resume_data.find_one({"_id": resume_obj_id}):
-        raise ValueError(f"resume_id {resume_obj_id} does not exist in resume_data!")
-    
-    # Validate required fields
-    required_fields = ["skill_name", "skill_category"]
-    for field in required_fields:
-        if not skill.get(field):
-            raise ValueError(f"Missing required field: {field}")
-
-    if not isinstance(skill["skill_name"], str):
-        raise ValueError("skill_name must be a string!")
-    if not isinstance(skill["skill_category"], str):
-        raise ValueError("skill_category must be a string!")
-    if "proficiency_score" in skill and not isinstance(skill["proficiency_score"], (int, float)):
-        raise ValueError("proficiency_score must be a number if provided!")
-
-    # Prepare document
-    skill_doc = {
-        "resume_id": resume_obj_id,
-        "skill_name": skill["skill_name"],
-        "skill_category": skill["skill_category"],
-        "proficiency_score": skill.get("proficiency_score"),
-        "created_at": datetime.utcnow()
-    }
-    
     try:
-        result = db.resume_skills.insert_one(skill_doc)
-        print(f"✅ Skill '{skill_doc['skill_name']}' inserted successfully!")
-        return result.inserted_id
+        with get_database_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO resume_analysis (
+                        resume_id, ats_score, keyword_match_score,
+                        format_score, section_score, missing_skills,
+                        recommendations
+                    ) 
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """, 
+                (
+                    resume_id,
+                    float(analysis.get("ats_score", 0)),
+                    float(analysis.get("keyword_match_score", 0)),
+                    float(analysis.get("format_score", 0)),
+                    float(analysis.get("section_score", 0)),
+                    analysis.get("missing_skills", ""),
+                    analysis.get("recommendations", "")
+                ))
+
     except Exception as e:
-        raise RuntimeError(f"Failed to insert skill: {e}")
-    
-def insert_resume_analysis(analysis):
-    """
-    Insert resume analysis document into resume_analysis collection
-    """
-    db = get_database_connection()
+        print(f"Error saving analysis data: {str(e)}")
 
-    # Validate and normalize resume_id
-    resume_id = analysis.get("resume_id")
-    if isinstance(resume_id, ObjectId):
-        resume_obj_id = resume_id
-    elif resume_id and ObjectId.is_valid(str(resume_id)):
-        resume_obj_id = ObjectId(str(resume_id))
-    else:
-        raise ValueError("Invalid resume_id: must be a valid ObjectId!")
-
-    # Ensure the resume exists
-    if not db.resume_data.find_one({"_id": resume_obj_id}):
-        raise ValueError(f"resume_id {resume_obj_id} does not exist in resume_data!")
-
-    # Validate numeric fields
-    numeric_fields = ["ats_score", "keyword_match_score", "format_score", "section_score"]
-    for field in numeric_fields:
-        if field in analysis and not isinstance(analysis[field], (int, float)):
-            raise ValueError(f"{field} must be a number!")
-
-    # Prepare document
-    analysis_doc = {
-        "resume_id": resume_obj_id,
-        "ats_score": analysis.get("ats_score"),
-        "keyword_match_score": analysis.get("keyword_match_score"),
-        "format_score": analysis.get("format_score"),
-        "section_score": analysis.get("section_score"),
-        "missing_skills": analysis.get("missing_skills"),
-        "recommendations": analysis.get("recommendations"),
-        "created_at": datetime.utcnow()
-    }
-
-    try:
-        result = db.resume_analysis.insert_one(analysis_doc)
-        print(f"✅ Analysis inserted successfully for resume_id {resume_obj_id}")
-        return result.inserted_id
-    except Exception as e:
-        raise RuntimeError(f"Failed to insert resume analysis: {e}")
-    
 def get_resume_stats():
     """
-    Get statistics about resumes
+    Get statistics about resumes from PostgreSQL
     """
-    db = get_database_connection()
-
     try:
-        # Total resumes
-        total_resumes = db.resume_data.count_documents({})
+        with get_database_connection() as conn:
+            with conn.cursor() as cursor:
 
-        # Average ATS score
-        pipeline = [
-            {"$group": {"_id": None, "avg_ats": {"$avg": "$ats_score"}}}
-        ]
-        avg_result = list(db.resume_analysis.aggregate(pipeline))
-        avg_ats_score = round(avg_result[0]["avg_ats"], 2) if avg_result and avg_result[0]["avg_ats"] is not None else 0
+                # Get total resumes
+                cursor.execute("SELECT COUNT(*) FROM resume_data")
+                total_resumes = cursor.fetchone()[0]
 
-        # Recent activity (last 5 resumes sorted by created_at desc)
-        recent_activity_cursor = db.resume_data.find(
-            {},
-            {"name": 1, "target_role": 1, "created_at": 1}
-        ).sort("created_at", -1).limit(5)
+                # Get average ATS score
+                cursor.execute("SELECT AVG(ats_score) FROM resume_analysis")
+                avg_ats_score = cursor.fetchone()[0] or 0
 
-        recent_activity = [
-            {
-                "name": doc.get("name"),
-                "target_role": doc.get("target_role"),
-                "created_at": doc.get("created_at")
-            }
-            for doc in recent_activity_cursor
-        ]
+                # Get recent activity
+                cursor.execute("""
+                    SELECT name, target_role, created_at 
+                    FROM resume_data 
+                    ORDER BY created_at DESC 
+                    LIMIT 5
+                """)
+                recent_activity = cursor.fetchall()
 
-        return {
-            "total_resumes": total_resumes,
-            "avg_ats_score": avg_ats_score,
-            "recent_activity": recent_activity
-        }
+                return {
+                    "total_resumes": total_resumes,
+                    "avg_ats_score": round(avg_ats_score, 2),
+                    "recent_activity": recent_activity
+                }
+
     except Exception as e:
-        print(f"❌ Error getting resume stats: {str(e)}")
+        print(f"Error getting resume stats: {str(e)}")
         return None
+
+def log_admin_action(admin_email, action):
+    """
+    Log admin login/logout actions to PostgreSQL
+    """
+    try:
+        with get_database_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO admin_logs (admin_email, action)
+                    VALUES (%s, %s)
+                """, 
+                (
+                    admin_email, 
+                    action
+                ))
+
+    except Exception as e:
+        print(f"Error logging admin action: {str(e)}")
+
+def get_admin_logs():
+    """
+    Get all admin login/logout logs from PostgreSQL
+    """
+    try:
+        with get_database_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT admin_email, action, created_at
+                    FROM admin_logs
+                    ORDER BY created_at DESC
+                """)
+                return cursor.fetchall()
+
+    except Exception as e:
+        print(f"Error getting admin logs: {str(e)}")
+        return []
+
+def get_all_resume_data():
+    """
+    Get all resume data for admin dashboard from PostgreSQL
+    """
+    try:
+        with get_database_connection() as conn:
+            with conn.cursor() as cursor:
+
+                # Get resume data joined with analysis data
+                cursor.execute("""
+                    SELECT 
+                        r.id,
+                        r.name,
+                        r.email,
+                        r.phone,
+                        r.linkedin,
+                        r.github,
+                        r.portfolio,
+                        r.target_role,
+                        r.target_category,
+                        r.created_at,
+                        a.ats_score,
+                        a.keyword_match_score,
+                        a.format_score,
+                        a.section_score
+                    FROM resume_data r
+                    LEFT JOIN resume_analysis a ON r.id = a.resume_id
+                    ORDER BY r.created_at DESC
+                """)
+                return cursor.fetchall()
+
+    except Exception as e:
+        print(f"Error getting resume data: {str(e)}")
+        return []
+
+def verify_admin(email, password):
+    """
+    Verify admin credentials in PostgreSQL
+    """
+    try:
+        with get_database_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    "SELECT * FROM admin WHERE email = %s AND password = %s",
+                    (email, password)
+                )
+                result = cursor.fetchone()
+                return bool(result)
+
+    except Exception as e:
+        print(f"Error verifying admin: {str(e)}")
+        return False
+
+def add_admin(email, password):
+    """
+    Add a new admin to PostgreSQL
+    """
+    try:
+        with get_database_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    "INSERT INTO admin (email, password) VALUES (%s, %s)",
+                    (email, password)
+                )
+                return True
+
+    except Exception as e:
+        print(f"Error adding admin: {str(e)}")
+        return False
+
+def save_ai_analysis_data(resume_id, analysis_data):
+    """
+    Save AI analysis data to PostgreSQL
+    """
+    try:
+        with get_database_connection() as conn:
+            with conn.cursor() as cursor:
+
+                # Insert the analysis data
+                cursor.execute("""
+                    INSERT INTO ai_analysis (
+                        resume_id, resume_score, job_role
+                    ) 
+                    VALUES (%s, %s, %s)
+                    RETURNING id
+                """, 
+                (
+                    resume_id,
+                    analysis_data.get("resume_score", 0),
+                    analysis_data.get("job_role", "")
+                ))
+
+                # Get inserted row ID
+                ai_analysis_id = cursor.fetchone()[0]
+                return ai_analysis_id
+
+    except Exception as e:
+        print(f"Error saving AI analysis data: {e}")
+        raise
+
+def get_ai_analysis_stats():
+    """
+    Get statistics about AI analyzer usage from PostgreSQL
+    """
+    try:
+        with get_database_connection() as conn:
+            with conn.cursor() as cursor:
+
+                # Get total number of analyses
+                cursor.execute("SELECT COUNT(*) FROM ai_analysis")
+                total_analyses = cursor.fetchone()[0]
+
+                if total_analyses == 0:
+                    return {
+                        "total_analyses": 0,
+                        "average_score": 0,
+                        "top_job_roles": []
+                    }
+
+                # Get average resume score
+                cursor.execute("SELECT AVG(resume_score) FROM ai_analysis")
+                average_score = cursor.fetchone()[0] or 0
+
+                # Get top job roles
+                cursor.execute("""
+                    SELECT job_role, COUNT(*) as count
+                    FROM ai_analysis
+                    GROUP BY job_role
+                    ORDER BY count DESC
+                    LIMIT 5
+                """)
+                top_job_roles = [{"role": row[0], "count": row[1]} for row in cursor.fetchall()]
+
+                return {
+                    "total_analyses": total_analyses,
+                    "average_score": round(average_score, 1),
+                    "top_job_roles": top_job_roles
+                }
+
+    except Exception as e:
+        print(f"Error getting AI analysis stats: {e}")
+        return {
+            "total_analyses": 0,
+            "average_score": 0,
+            "top_job_roles": []
+        }
+
+def get_detailed_ai_analysis_stats():
+    """
+    Get detailed statistics about AI analyzer usage including daily trends
+    """
+    try:
+        with get_database_connection() as conn:
+            with conn.cursor() as cursor:
+                
+                # Get total number of analyses
+                cursor.execute("SELECT COUNT(*) FROM ai_analysis")
+                total_analyses = cursor.fetchone()[0]
+
+                if total_analyses == 0:
+                    return {
+                        "total_analyses": 0,
+                        "average_score": 0,
+                        "top_job_roles": [],
+                        "daily_trend": [],
+                        "score_distribution": [],
+                        "recent_analyses": []
+                    }
+
+                # Get average resume score
+                cursor.execute("SELECT AVG(resume_score) FROM ai_analysis")
+                average_score = cursor.fetchone()[0] or 0
+
+                # Get top job roles
+                cursor.execute("""
+                    SELECT job_role, COUNT(*) as count
+                    FROM ai_analysis
+                    GROUP BY job_role
+                    ORDER BY count DESC
+                    LIMIT 5
+                """)
+                top_job_roles = [{"role": row[0], "count": row[1]} for row in cursor.fetchall()]
+
+                # Get daily trend for the last 7 days
+                cursor.execute("""
+                    SELECT DATE(created_at) as date, COUNT(*) as count
+                    FROM ai_analysis
+                    WHERE created_at >= NOW() - INTERVAL '7 days'
+                    GROUP BY DATE(created_at)
+                    ORDER BY date
+                """)
+                daily_trend = [{"date": str(row[0]), "count": row[1]} for row in cursor.fetchall()]
+
+                # Get score distribution
+                score_ranges = [
+                    {"min": 0, "max": 20, "range": "0-20"},
+                    {"min": 21, "max": 40, "range": "21-40"},
+                    {"min": 41, "max": 60, "range": "41-60"},
+                    {"min": 61, "max": 80, "range": "61-80"},
+                    {"min": 81, "max": 100, "range": "81-100"}
+                ]
+
+                score_distribution = []
+                for range_info in score_ranges:
+                    cursor.execute("""
+                        SELECT COUNT(*) FROM ai_analysis 
+                        WHERE resume_score BETWEEN %s AND %s
+                    """, 
+                    (range_info["min"], range_info["max"]))
+                    count = cursor.fetchone()[0]
+                    score_distribution.append({"range": range_info["range"], "count": count})
+
+                # Get recent analyses
+                cursor.execute("""
+                    SELECT resume_score, job_role, created_at
+                    FROM ai_analysis
+                    ORDER BY created_at DESC
+                    LIMIT 5
+                """)
+                recent_analyses = [
+                    {
+                        "score": row[0],
+                        "job_role": row[1],
+                        "date": str(row[2])
+                    } for row in cursor.fetchall()
+                ]
+
+                return {
+                    "total_analyses": total_analyses,
+                    "average_score": round(average_score, 1),
+                    "top_job_roles": top_job_roles,
+                    "daily_trend": daily_trend,
+                    "score_distribution": score_distribution,
+                    "recent_analyses": recent_analyses
+                }
+
+    except Exception as e:
+        print(f"Error getting detailed AI analysis stats: {e}")
+        return {
+            "total_analyses": 0,
+            "average_score": 0,
+            "top_job_roles": [],
+            "daily_trend": [],
+            "score_distribution": [],
+            "recent_analyses": []
+        }
+
+def reset_ai_analysis_stats():
+    """
+    Reset AI analysis statistics by truncating the ai_analysis table
+    """
+    try:
+        with get_database_connection() as conn:
+            with conn.cursor() as cursor:
+
+                # Truncate the table
+                cursor.execute("TRUNCATE TABLE ai_analysis RESTART IDENTITY CASCADE;")
+
+                return {"success": True, "message": "AI analysis statistics have been reset successfully."}
+    
+    except Exception as e:
+        print(f"Error resetting AI analysis stats: {e}")
+        return {"success": False, "message": f"Error resetting AI analysis statistics: {str(e)}"}

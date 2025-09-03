@@ -183,7 +183,7 @@ class ResumeAnalyzer:
         Extract personal information from resume text
         """
         # Basic patterns for personal info
-        email_pattern = r"[\w\.-]+@[\w\.-]+\.\w+"
+        email_pattern = r"\b[\w\.-]+@[\w\.-]+\.\w+\b"
         phone_pattern = r"(\+?\d{1,3}[-.\s]?)?(\(?\d{2,4}\)?[-.\s]?)?\d{3,5}[-.\s]?\d{3,5}"
         linkedin_pattern = r"linkedin\.com/in/[\w-]+"
         github_pattern = r"github\.com/[\w-]+"
@@ -412,7 +412,7 @@ class ResumeAnalyzer:
             
             if in_summary_section:
                 if line and any(keyword in line.lower() for keyword in self.document_types["resume"]):
-                    if not any(keyword in line.lower() for keyword in summary_keywords):
+                    if not any(sum_key in line.lower() for sum_key in summary_keywords):
                         in_summary_section = False
                         if current_entry:
                             summary.append(" ".join(current_entry))
@@ -553,14 +553,13 @@ class ResumeAnalyzer:
             )
             
             # Combine all suggestions
-            suggestions = (
-            contact_suggestions +
-            summary_suggestions +
-            skills_suggestions +
-            experience_suggestions +
-            education_suggestions +
-            format_suggestions
-            )
+            suggestions = []
+            suggestions.extend(contact_suggestions)
+            suggestions.extend(summary_suggestions)
+            suggestions.extend(skills_suggestions)
+            suggestions.extend(experience_suggestions)
+            suggestions.extend(education_suggestions)
+            suggestions.extend(format_suggestions)
             
             if not suggestions:
                 suggestions.append("Your resume is well-optimized for ATS systems.")
