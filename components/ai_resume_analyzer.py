@@ -15,16 +15,12 @@ import warnings
 from docx import Document
 from dotenv import load_dotenv
 from pdf2image import convert_from_path
-from reportlab.graphics.charts.barcharts import VerticalBarChart
-from reportlab.graphics.charts.legends import Legend
-from reportlab.graphics.charts.linecharts import HorizontalLineChart
-from reportlab.graphics.charts.piecharts import Pie
 from reportlab.graphics.shapes import Drawing, Rect, String, Line
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, Flowable, KeepTogether
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Flowable
 
 class AIResumeAnalyzer:
     def __init__(self):
@@ -47,7 +43,7 @@ class AIResumeAnalyzer:
         """
         Extract text from PDF using multiple strategies:
         1. pdfplumber (direct text extraction)
-        2. PyPDF2 (fallback method)
+        2. pypdf (fallback method)
         3. OCR via pdf2image + pytesseract (last resort for scanned PDFs)
         """
         text = ""
@@ -81,8 +77,8 @@ class AIResumeAnalyzer:
             if text.strip():
                 return text.strip()        
             
-            # Method 2: PyPDF2
-            st.info("Trying PyPDF2 extraction method...")
+            # Method 2: pypdf
+            st.info("Trying pypdf extraction method...")
             pdf_text = ""
             try:
                 with open(temp_path, "rb") as file:
@@ -95,7 +91,7 @@ class AIResumeAnalyzer:
                 if pdf_text.strip():
                     return pdf_text.strip()
             except Exception as e:
-                st.warning(f"PyPDF2 extraction failed: {e}")
+                st.warning(f"pypdf extraction failed: {e}")
             
             # Method 3: OCR
             st.warning("Standard text extraction failed. Trying OCR (this may take some time)...")
@@ -181,7 +177,7 @@ class AIResumeAnalyzer:
             model = genai.GenerativeModel("gemini-2.0-flash")
             
             base_prompt = f"""
-            You are an expert resume analyst with deep knowledge of industry standards, job requirements, and hiring practices across various fields. Your task is to provide a comprehensive, detailed analysis of the resume provided.
+            You are an expert resume analyst with deep knowledge of industry standards, job requirements, and hiring practices across various fields. Your task is to provide a comprehensive, fair, detailed analysis of the resume provided.
             
             Please structure your response in the following format:
             

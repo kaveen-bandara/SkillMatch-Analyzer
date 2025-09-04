@@ -1,14 +1,12 @@
+import datetime
 import streamlit as st
 import traceback
 import traceback
 import requests
-import datetime
-from datetime import datetime
 import pandas as pd
 import numpy as np
-from config.database import init_database, get_database_connection, save_analysis_data, save_resume_data, save_ai_analysis_data
 from config.database import (
-    get_database_connection, init_database, save_resume_data, save_analysis_data,
+    init_database, save_resume_data, save_analysis_data,
     log_admin_action, verify_admin, save_ai_analysis_data,
     get_ai_analysis_stats, get_detailed_ai_analysis_stats, reset_ai_analysis_stats
 )
@@ -18,7 +16,7 @@ from config.courses import (
     get_courses_for_role, get_category_for_role
     )
 from ui_components import (
-    apply_styles, hero_section, 
+    hero_section, 
     feature_card, page_header
     )
 from config.database import reset_ai_analysis_stats
@@ -29,7 +27,7 @@ from config.job_roles import JOB_ROLES
 from components.ai_resume_analyzer import AIResumeAnalyzer
 from components.resume_analyzer import ResumeAnalyzer
 from components.resume_builder import ResumeBuilder
-#from dashboard.dashboard import DashboardManager
+from components.dashboard import DashboardManager
 
 st.set_page_config(
     page_title="SkillMatch: Smart Resume Analyzer",
@@ -78,12 +76,11 @@ class SkillMatchApp:
             "🏠 HOME": self.render_home,
             "🔍 RESUME ANALYZER": self.render_analyzer,
             "📝 RESUME BUILDER": self.render_builder,
-            #"📊 DASHBOARD": self.render_dashboard,
-            #"🎯 JOB SEARCH": self.render_job_search
+            "📊 DASHBOARD": self.render_dashboard,
         }
 
         # Initialize dashboard manager
-        #self.dashboard_manager = DashboardManager()
+        self.dashboard_manager = DashboardManager()
         self.analyzer = ResumeAnalyzer()
         self.ai_analyzer = AIResumeAnalyzer()
         self.builder = ResumeBuilder()
@@ -123,6 +120,13 @@ class SkillMatchApp:
                 <p style='margin: 0;'>{message}</p>
             </div>
         """
+
+    def render_dashboard(self):
+        """
+        Render the dashboard page
+        """
+        self.dashboard_manager.render_dashboard()
+
 
     def render_builder(self):
         """
@@ -457,9 +461,7 @@ class SkillMatchApp:
             """, unsafe_allow_html=True)
 
             # File Upload
-            uploaded_file = st.file_uploader(
-    "Upload your resume", type=[
-        'pdf', 'docx'], key="standard_file")
+            uploaded_file = st.file_uploader("Upload your resume", type=['pdf', 'docx'], key="standard_file")
 
             if not uploaded_file:
                 # Display empty state with a prominent upload button
@@ -703,11 +705,8 @@ class SkillMatchApp:
                                 """, unsafe_allow_html=True)
                                 for suggestion in analysis.get(
                                     'contact_suggestions', []):
-                                    st.markdown(
-    f"<li style='margin-bottom: 8px;'>✓ {suggestion}</li>",
-     unsafe_allow_html=True)
-                                st.markdown(
-    "</ul></div>", unsafe_allow_html=True)
+                                    st.markdown(f"<li style='margin-bottom: 8px;'>✓ {suggestion}</li>", unsafe_allow_html=True)
+                                st.markdown("</ul></div>", unsafe_allow_html=True)
 
                             # Summary Section
                         if analysis.get('summary_suggestions'):
@@ -757,11 +756,8 @@ class SkillMatchApp:
                                 """, unsafe_allow_html=True)
                                 for suggestion in analysis.get(
                                     'experience_suggestions', []):
-                                    st.markdown(
-    f"<li style='margin-bottom: 8px;'>✓ {suggestion}</li>",
-     unsafe_allow_html=True)
-                                st.markdown(
-    "</ul></div>", unsafe_allow_html=True)
+                                    st.markdown(f"<li style='margin-bottom: 8px;'>✓ {suggestion}</li>", unsafe_allow_html=True)
+                                st.markdown("</ul></div>", unsafe_allow_html=True)
 
                             # Education Section
                         if analysis.get('education_suggestions'):
@@ -772,11 +768,8 @@ class SkillMatchApp:
                                 """, unsafe_allow_html=True)
                                 for suggestion in analysis.get(
                                     'education_suggestions', []):
-                                    st.markdown(
-    f"<li style='margin-bottom: 8px;'>✓ {suggestion}</li>",
-     unsafe_allow_html=True)
-                                st.markdown(
-    "</ul></div>", unsafe_allow_html=True)
+                                    st.markdown(f"<li style='margin-bottom: 8px;'>✓ {suggestion}</li>", unsafe_allow_html=True)
+                                st.markdown("</ul></div>", unsafe_allow_html=True)
 
                             # General Formatting Suggestions
                         if analysis.get('format_suggestions'):
@@ -787,11 +780,8 @@ class SkillMatchApp:
                                 """, unsafe_allow_html=True)
                                 for suggestion in analysis.get(
                                     'format_suggestions', []):
-                                    st.markdown(
-    f"<li style='margin-bottom: 8px;'>✓ {suggestion}</li>",
-     unsafe_allow_html=True)
-                                st.markdown(
-    "</ul></div>", unsafe_allow_html=True)
+                                    st.markdown( f"<li style='margin-bottom: 8px;'>✓ {suggestion}</li>", unsafe_allow_html=True)
+                                st.markdown("</ul></div>", unsafe_allow_html=True)
 
                         st.markdown("</div>", unsafe_allow_html=True)
 
@@ -883,10 +873,7 @@ class SkillMatchApp:
                 try:
                     # Add a reset button for admin users
                     if st.session_state.get('is_admin', False):
-                        if st.button(
-    "🔄 Reset AI Analysis Statistics",
-    type="secondary",
-     key="reset_ai_stats_button_2"):
+                        if st.button("🔄 Reset AI Analysis Statistics", type="secondary", key="reset_ai_stats_button_2"):
                             result = reset_ai_analysis_stats()
                             if result["success"]:
                                 st.success(result["message"])
@@ -960,9 +947,7 @@ class SkillMatchApp:
                                 mode="gauge+number",
                                 value=ai_stats["average_score"],
                                 domain={'x': [0, 1], 'y': [0, 1]},
-                                title={
-    'text': "Score", 'font': {
-        'size': 14, 'color': 'white'}},
+                                title={'text': "Score", 'font': {'size': 14, 'color': 'white'}},
                                 gauge={
                                     'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "white"},
                                     'bar': {'color': "#38ef7d" if ai_stats["average_score"] >= 80 else "#FFEB3B" if ai_stats["average_score"] >= 60 else "#FF5252"},
@@ -1007,10 +992,7 @@ class SkillMatchApp:
                             fig.update_traces(
                                 textposition='inside',
                                 textinfo='percent+label',
-                                marker=dict(
-    line=dict(
-        color='#000000',
-         width=1.5))
+                                marker=dict(line=dict(color='#000000', width=1.5))
                             )
 
                             fig.update_layout(
@@ -1051,8 +1033,7 @@ class SkillMatchApp:
                                 y="count",
                                 color="count",
                                 color_continuous_scale=px.colors.sequential.Viridis,
-                                labels={
-    "role": "Job Role", "count": "Number of Analyses"}
+                                labels={"role": "Job Role", "count": "Number of Analyses"}
                             )
 
                             fig.update_traces(
@@ -1098,10 +1079,7 @@ class SkillMatchApp:
                             # Create mock data for timeline
 
                             today = datetime.datetime.now()
-                            dates = [
-    (today -
-    datetime.timedelta(
-        days=i)).strftime('%Y-%m-%d') for i in range(7)]
+                            dates = [(today - datetime.timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
                             dates.reverse()
 
                             # Generate some random data that sums to
@@ -1135,9 +1113,7 @@ class SkillMatchApp:
 
                             fig.update_traces(
                                 line=dict(width=3),
-                                marker=dict(
-    size=8, line=dict(
-        width=2, color='white'))
+                                marker=dict(size=8, line=dict(width=2, color='white'))
                             )
 
                             fig.update_layout(
@@ -1191,9 +1167,7 @@ class SkillMatchApp:
                                     "61-80": "#8BC34A",
                                     "81-100": "#38ef7d"
                                 },
-                                labels={
-    "range": "Score Range",
-     "count": "Number of Resumes"},
+                                labels={"range": "Score Range", "count": "Number of Resumes"},
                                 text="count"  # Display count values on bars
                             )
 
@@ -1202,8 +1176,7 @@ class SkillMatchApp:
                                 marker_line_color="white",
                                 opacity=0.9,
                                 textposition='outside',
-                                textfont=dict(
-    color="white", size=14, family="Arial, sans-serif"),
+                                textfont=dict(color="white", size=14, family="Arial, sans-serif"),
                                 hovertemplate="<b>Score Range:</b> %{x}<br><b>Number of Resumes:</b> %{y}<extra></extra>"
                             )
 
@@ -1213,8 +1186,7 @@ class SkillMatchApp:
                                 height=400,  # Increase height for better visibility
                                 paper_bgcolor='rgba(0,0,0,0)',
                                 plot_bgcolor='rgba(0,0,0,0)',
-                                font=dict(
-    color="#ffffff", size=14, family="Arial, sans-serif"),
+                                font=dict(color="#ffffff", size=14, family="Arial, sans-serif"),
                                 # title={
                                 #     # 'text': 'Resume Score Distribution',
                                 #     'y': 0.95,
@@ -1224,19 +1196,16 @@ class SkillMatchApp:
                                 #     'font': {'size': 22, 'color': 'white', 'family': 'Arial, sans-serif', 'weight': 'bold'}
                                 # },
                                 xaxis=dict(
-                                    title=dict(
-    text="Score Range", font=dict(
-        size=16, color="white")),
+                                    title=dict(text="Score Range", font=dict(size=16, color="white")),
                                     categoryorder="array",
-                                    categoryarray=[
-    "0-20", "21-40", "41-60", "61-80", "81-100"],
+                                    categoryarray=["0-20", "21-40", "41-60", "61-80", "81-100"],
                                     tickfont=dict(size=14, color="white"),
                                     gridcolor="rgba(255, 255, 255, 0.1)"
                                 ),
                                 yaxis=dict(
                                     title=dict(
-    text="Number of Resumes", font=dict(
-        size=16, color="white")),
+                                        text="Number of Resumes", font=dict(
+                                    size=16, color="white")),
                                     tickfont=dict(size=14, color="white"),
                                     gridcolor="rgba(255, 255, 255, 0.1)",
                                     zeroline=False
@@ -1460,8 +1429,7 @@ class SkillMatchApp:
 
             # Job Role Selection for AI Analysis
             categories = list(self.job_roles.keys())
-            selected_category = st.selectbox(
-    "Job Category", categories, key="ai_category")
+            selected_category = st.selectbox("Job Category", categories, key="ai_category")
 
             roles = list(self.job_roles[selected_category].keys())
             selected_role = st.selectbox("Specific Role", roles, key="ai_role")
@@ -1479,9 +1447,7 @@ class SkillMatchApp:
             """, unsafe_allow_html=True)
 
             # File Upload for AI Analysis
-            uploaded_file = st.file_uploader(
-    "Upload your resume", type=[
-        'pdf', 'docx'], key="ai_file")
+            uploaded_file = st.file_uploader("Upload your resume", type=['pdf', 'docx'], key="ai_file")
 
             if not uploaded_file:
             # Display empty state with a prominent upload button
@@ -2034,19 +2000,48 @@ class SkillMatchApp:
         """
         with st.sidebar:
             st_lottie(self.load_lottie_url("https://assets5.lottiefiles.com/packages/lf20_xyadoh9h.json"), height=200, key="sidebar_animation")
-            st.title("Smart Resume AI")
+            st.title("SkillMatch: Smart Resume Analyzer")
             st.markdown("---")
             
             # Navigation buttons
             for page_name in self.pages.keys():
                 if st.button(page_name, use_container_width=True):
-                    cleaned_name = page_name.lower().replace(" ", "_").replace("🏠", "").replace("🔍", "").replace("📝", "").replace("📊", "").replace("🎯", "").replace("💬", "").replace("ℹ️", "").strip()
+                    cleaned_name = page_name.lower().replace(" ", "_").replace("🏠", "").replace("🔍", "").replace("📝", "").replace("📊", "").strip()
                     st.session_state.page = cleaned_name
                     st.rerun()
 
             # Add some space before admin login
-            st.markdown("<br><br>", unsafe_allow_html=True)
+            st.markdown("<br>", unsafe_allow_html=True)
             st.markdown("---")
+
+            # Admin Login/Logout section at bottom
+            if st.session_state.get('is_admin', False):
+                st.success(f"Logged in as: {st.session_state.get('current_admin_email')}")
+                if st.button("Logout", key="logout_button"):
+                    try:
+                        log_admin_action(st.session_state.get('current_admin_email'), "logout")
+                        st.session_state.is_admin = False
+                        st.session_state.current_admin_email = None
+                        st.success("Logged out successfully!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error during logout: {str(e)}")
+            else:
+                with st.expander("👤 Admin Login"):
+                    admin_email_input = st.text_input("Email", key="admin_email_input")
+                    admin_password = st.text_input("Password", type="password", key="admin_password_input")
+                    if st.button("Login", key="login_button"):
+                            try:
+                                if verify_admin(admin_email_input, admin_password):
+                                    st.session_state.is_admin = True
+                                    st.session_state.current_admin_email = admin_email_input
+                                    log_admin_action(admin_email_input, "login")
+                                    st.success("Logged in successfully!")
+                                    st.rerun()
+                                else:
+                                    st.error("Invalid credentials")
+                            except Exception as e:
+                                st.error(f"Error during login: {str(e)}")
 
         # Force home page on first load
         if "initial_load" not in st.session_state:

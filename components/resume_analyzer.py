@@ -1,5 +1,5 @@
 import io
-import PyPDF2
+import pypdf
 import re
 import traceback
 from docx import Document
@@ -143,7 +143,7 @@ class ResumeAnalyzer:
     
     def extract_text_from_pdf(self, pdf_file):
         """
-        Code to extract text from PDF files
+        Extract text from PDF files
         """
         try:       
             # Handle file input
@@ -154,7 +154,7 @@ class ResumeAnalyzer:
                 file_content = pdf_file
                 
             # Create PDF reader
-            pdf_reader = PyPDF2.PdfReader(io.BytesIO(file_content))
+            pdf_reader = pypdf.PdfReader(io.BytesIO(file_content))
             
             # Extract text
             text = ""
@@ -167,7 +167,7 @@ class ResumeAnalyzer:
         
     def extract_text_from_docx(self, docx_file):
         """
-        Code to extract text from DOCX files
+        Extract text from DOCX files
         """
         try:
             doc = Document(docx_file)

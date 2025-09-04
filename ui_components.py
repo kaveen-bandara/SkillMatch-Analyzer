@@ -1,15 +1,5 @@
 import streamlit as st
 
-def apply_styles():
-    """
-    Apply styles by loading the CSS file and FontAwesome icons
-    """
-    try:
-        with open("styles/styles.css") as f:
-            st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
-    except FileNotFoundError:
-        st.warning("⚠️ styles.css not found. Please add it to your project root")
-        
 def page_header(title, subtitle=None):
     """
     Render a consistent page header with gradient background

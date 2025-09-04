@@ -1,0 +1,15 @@
+streamlit
+streamlit_lottie
+requests
+numpy
+dotenv
+psycopg2
+python-docx
+plotly
+pypdf
+pdfplumber
+pytesseract
+google-generativeai
+reportlab
+pdf2image
+pandas

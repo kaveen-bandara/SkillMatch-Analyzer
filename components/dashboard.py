@@ -455,7 +455,7 @@ class DashboardManager:
         
         if admin_logs:
             # Convert to DataFrame
-            df = pd.DataFrame(admin_logs, columns=["Admin Email", "Action", "Timestamp"])
+            df = pd.DataFrame(admin_logs, columns=["Admin Email", "Action", "created_at"])
             
             # Style the dataframe
             st.markdown("""
@@ -627,9 +627,9 @@ class DashboardManager:
         cursor = self.conn.cursor()
         try:
             cursor.execute("""
-                SELECT admin_email, action, timestamp
+                SELECT admin_email, action, created_at
                 FROM admin_logs
-                ORDER BY timestamp DESC
+                ORDER BY created_at DESC
             """)
             return cursor.fetchall()
         except Exception as e:
