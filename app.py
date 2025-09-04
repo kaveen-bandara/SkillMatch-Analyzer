@@ -30,7 +30,7 @@ from components.resume_builder import ResumeBuilder
 from components.dashboard import DashboardManager
 
 st.set_page_config(
-    page_title="SkillMatch: Smart Resume Analyzer",
+    page_title="SkillMatch",
     page_icon="🚀",
     layout="wide"
 )
@@ -1932,7 +1932,7 @@ class SkillMatchApp:
         """
         # Hero Section
         hero_section(
-            "SkillMatch: Smart Resume Analyzer",
+            "SkillMatch",
             "Transform your career with AI-powered resume tools to analyze and improve your resume. Get personalized insights tailored to your industry and career goals."
         )
         
@@ -1968,7 +1968,7 @@ class SkillMatchApp:
             # GitHub repo button
             st.markdown("""
             <div style="display: flex; justify-content: center; align-items: center; margin-bottom: 10px;">
-                <a href="https://github.com/kaveen-bandara/SkillMatch-Smart-Resume-Analyzer" target="_blank" style="text-decoration: none;">
+                <a href="https://github.com/kaveen-bandara/SkillMatch" target="_blank" style="text-decoration: none;">
                     <div style="display: flex; align-items: center; background-color: #24292e; padding: 5px 10px; border-radius: 5px; transition: all 0.3s ease;">
                         <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="black" style="margin-right: 5px;">
                             <path d="M12 .5C5.65.5.5 5.65.5 12.01c0 5.1 3.3 9.42 7.9 10.96.58.1.8-.25.8-.56 0-.28-.01-1.02-.01-2-3.22.7-3.9-1.55-3.9-1.55-.53-1.34-1.3-1.7-1.3-1.7-1.05-.72.08-.7.08-.7 1.17.08 1.79 1.2 1.79 1.2 1.04 1.78 2.74 1.26 3.4.96.1-.75.4-1.26.72-1.55-2.57-.29-5.27-1.28-5.27-5.7 0-1.26.45-2.29 1.2-3.1-.13-.3-.52-1.5.12-3.1 0 0 .98-.31 3.2 1.2a11.2 11.2 0 0 1 5.8 0c2.22-1.51 3.2-1.2 3.2-1.2.64 1.6.25 2.8.12 3.1.75.81 1.2 1.84 1.2 3.1 0 4.43-2.7 5.4-5.3 5.7.42.36.77 1.1.77 2.22 0 1.6-.01 2.9-.01 3.3 0 .3.2.66.8.55A11.52 11.52 0 0 0 23.5 12c0-6.36-5.15-11.5-11.5-11.5z" fill="gold" />
@@ -2000,7 +2000,7 @@ class SkillMatchApp:
         """
         with st.sidebar:
             st_lottie(self.load_lottie_url("https://assets5.lottiefiles.com/packages/lf20_xyadoh9h.json"), height=200, key="sidebar_animation")
-            st.title("SkillMatch: Smart Resume Analyzer")
+            st.title("SkillMatch")
             st.markdown("---")
             
             # Navigation buttons
