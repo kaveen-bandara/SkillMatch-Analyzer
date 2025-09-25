@@ -1,7 +1,6 @@
 import datetime
 import streamlit as st
 import traceback
-import traceback
 import requests
 import pandas as pd
 import numpy as np
@@ -44,18 +43,19 @@ class SkillMatchApp:
         if "form_data" not in st.session_state:
             st.session_state.form_data = {
                 "personal_info": {
-                    "full_name": "",
+                    "name": "",
                     "email": "",
                     "phone": "",
-                    "location": "",
+                    "github": "",
                     "linkedin": "",
                     "portfolio": ""
                 },
                 "summary": "",
-                "experiences": [],
                 "education": [],
+                "experience": [],
                 "projects": [],
-                "skills_categories": {
+                "references": [],
+                "skills": {
                     "technical": [],
                     "soft": [],
                     "languages": [],
@@ -132,27 +132,31 @@ class SkillMatchApp:
         """
         Render resume builder page
         """
-        
         st.title("Resume Builder 📝")
-        st.write("Create your professional resume with SkillMatch's very own resume builder.")
-        st.write("Just enter resume details and we will handle the rest.")
+        st.write("Create your professional resume draft with SkillMatch's very own resume builder.")
+        st.write("Just enter your resume details and SkillMatch will handle the rest.")
 
-        # -----------------------
+        # Template selection
+        template_options = ["Classic", "Modern Split", "Block Style"]
+        selected_template = st.selectbox("Select Resume Template", template_options)
+        st.success(f"🎨 Currently using: {selected_template}")
+
+        # --------------------
         # Personal information
-        # -----------------------
+        # --------------------
         st.subheader("Personal Information")
 
         col1, col2 = st.columns(2)
         with col1:
             # Get existing values from session state
-            existing_name = st.session_state.form_data["personal_info"]["full_name"]
+            existing_name = st.session_state.form_data["personal_info"]["name"]
             existing_email = st.session_state.form_data["personal_info"]["email"]
             existing_phone = st.session_state.form_data["personal_info"]["phone"]
 
             # Input fields with existing values
-            full_name = st.text_input("Full Name", value=existing_name)
-            email = st.text_input("Email", value=existing_email, key="email_input")
-            phone = st.text_input("Phone", value=existing_phone)
+            name = st.text_input("Full Name", value=existing_name, help="Enter your full name that you want shown in your resume.")
+            email = st.text_input("Email", value=existing_email, key="email_input", help="Enter your email address.")
+            phone = st.text_input("Phone", value=existing_phone, help="Enter your phone number.")
 
             # Immediately update session state after email input
             if "email_input" in st.session_state:
@@ -160,110 +164,38 @@ class SkillMatchApp:
 
         with col2:
             # Get existing values from session state
-            existing_location = st.session_state.form_data["personal_info"]["location"]
+            existing_github = st.session_state.form_data["personal_info"]["github"]
             existing_linkedin = st.session_state.form_data["personal_info"]["linkedin"]
             existing_portfolio = st.session_state.form_data["personal_info"]["portfolio"]
 
             # Input fields with existing values
-            location = st.text_input("Location", value=existing_location)
-            linkedin = st.text_input("LinkedIn URL", value=existing_linkedin)
-            portfolio = st.text_input("Portfolio Website", value=existing_portfolio)
+            github = st.text_input("GitHub URL", value=existing_github, help="Paste your GitHub URL link in \"github.com/(username)\" format.")
+            linkedin = st.text_input("LinkedIn URL", value=existing_linkedin, help="Paste your LinkedIn URL link in \"linkedin.com/in/(username)\" format.")
+            portfolio = st.text_input("Portfolio Website URL", value=existing_portfolio, help="Paste your portfolio website or social media URL link where you showcase your work.")
 
         # Update personal info in session state
         st.session_state.form_data["personal_info"] = {
-            "full_name": full_name,
+            "name": name,
             "email": email,
             "phone": phone,
-            "location": location,
+            "github": github,
             "linkedin": linkedin,
             "portfolio": portfolio
         }
 
+        # --------------------
         # Professional Summary
+        # --------------------
         st.subheader("Professional Summary")
-        summary = st.text_area("Professional Summary", value=st.session_state.form_data.get("summary", ""), height=150, help="Write a brief summary highlighting your key skills and experience")
+        summary = st.text_area("Professional Summary", value=st.session_state.form_data.get("summary", ""), height=150, help="Write a brief summary highlighting professionally about you.")
 
-        # Experience Section
-        st.subheader("Work Experience")
-        if "experiences" not in st.session_state.form_data:
-            st.session_state.form_data["experiences"] = []
+        st.session_state.form_data.update({
+            "summary": summary
+        })
 
-        if st.button("Add Experience"):
-            st.session_state.form_data["experiences"].append({
-                "company": "",
-                "position": "",
-                "start_date": "",
-                "end_date": "",
-                "description": "",
-                "responsibilities": [],
-                "achievements": []
-            })
-
-        for idx, exp in enumerate(st.session_state.form_data["experiences"]):
-            with st.expander(f"Experience {idx + 1}", expanded=True):
-                col1, col2 = st.columns(2)
-                with col1:
-                    exp["company"] = st.text_input("Company Name", key=f"company_{idx}", value=exp.get("company", ""))
-                    exp["position"] = st.text_input("Position", key=f"position_{idx}", value=exp.get("position", ""))
-                with col2:
-                    exp["start_date"] = st.text_input("Start Date", key=f"start_date_{idx}", value=exp.get("start_date", ""))
-                    exp["end_date"] = st.text_input("End Date", key=f"end_date_{idx}", value=exp.get("end_date", ""))
-
-                exp["description"] = st.text_area("Role Overview", key=f"desc_{idx}", value=exp.get("description", ""), help="Brief overview of your role and impact")
-
-                # Responsibilities
-                st.markdown("##### Key Responsibilities")
-                resp_text = st.text_area("Enter responsibilities (one per line)", key=f"resp_{idx}", value="\n".join(exp.get("responsibilities", [])), height=100, help="List your main responsibilities, one per line")
-                exp["responsibilities"] = [r.strip() for r in resp_text.split("\n") if r.strip()]
-
-                # Achievements
-                st.markdown("##### Key Achievements")
-                achv_text = st.text_area("Enter achievements (one per line)", key=f"achv_{idx}", value="\n".join(exp.get("achievements", [])), height=100, help="List your notable achievements, one per line")
-                exp["achievements"] = [a.strip() for a in achv_text.split("\n") if a.strip()]
-
-                if st.button("Remove Experience", key=f"remove_exp_{idx}"):
-                    st.session_state.form_data["experiences"].pop(idx)
-                    st.rerun()
-
-        # Projects Section
-        st.subheader("Projects")
-        if "projects" not in st.session_state.form_data:
-            st.session_state.form_data["projects"] = []
-
-        if st.button("Add Project"):
-            st.session_state.form_data["projects"].append({
-                "name": "",
-                "technologies": "",
-                "description": "",
-                "responsibilities": [],
-                "achievements": [],
-                "link": ""
-            })
-
-        for idx, proj in enumerate(st.session_state.form_data["projects"]):
-            with st.expander(f"Project {idx + 1}", expanded=True):
-                proj["name"] = st.text_input("Project Name", key=f"proj_name_{idx}", value=proj.get("name",""))
-
-                proj["technologies"] = st.text_input("Technologies Used", key=f"proj_tech_{idx}", value=proj.get("technologies", ""), help="List the main technologies, frameworks and tools used")
-                proj["description"] = st.text_area("Project Overview", key=f"proj_desc_{idx}", value=proj.get("description", ""), help="Brief overview of the project and its goals")
-
-                # Project Responsibilities
-                st.markdown("##### Key Responsibilities")
-                proj_resp_text = st.text_area("Enter responsibilities (one per line)", key=f"proj_resp_{idx}", value="\n".join(proj.get("responsibilities", [])), height=100, help="List your main responsibilities in the project")
-                proj["responsibilities"] = [r.strip() for r in proj_resp_text.split("\n") if r.strip()]
-
-                # Project Achievements
-                st.markdown("##### Key Achievements")
-                proj_achv_text = st.text_area("Enter achievements (one per line)", key=f"proj_achv_{idx}", value="\n".join(proj.get("achievements", [])), height=100, help="List the project's key achievements and your contributions")
-                proj["achievements"] = [a.strip() for a in proj_achv_text.split("\n") if a.strip()]
-
-                proj["link"] = st.text_input("Project Link (optional)", key=f"proj_link_{idx}", value=proj.get("link", ""), help="Link to the project repository, demo or documentation")
-
-                if st.button("Remove Project", key=f"remove_proj_{idx}"):
-                    st.session_state.form_data["projects"].pop(idx)
-                    st.rerun()
-
-        # Education Section
+        # ---------
+        # Education
+        # ---------
         st.subheader("Education")
         if "education" not in st.session_state.form_data:
             st.session_state.form_data["education"] = []
@@ -282,27 +214,129 @@ class SkillMatchApp:
             with st.expander(f"Education {idx + 1}", expanded=True):
                 col1, col2 = st.columns(2)
                 with col1:
-                    edu["school"] = st.text_input("School/University", key=f"school_{idx}", value=edu.get("school",""))
-                    edu["degree"] = st.text_input("Degree", key=f"degree_{idx}", value=edu.get("degree", ""))
+                    edu["school"] = st.text_input("School/University", key=f"school_{idx}", value=edu.get("school", ""), help="Enter the name of your school/university where you got your education from.")
+                    edu["degree"] = st.text_input("Degree", key=f"degree_{idx}", value=edu.get("degree", ""), help="Diploma, BSc, BA, MSc, MBA, PhD, etc.")
                 with col2:
-                    edu["field"] = st.text_input("Field of Study", key=f"field_{idx}", value=edu.get("field", ""))
-                    edu["graduation_date"] = st.text_input("Graduation Date", key=f"grad_date_{idx}", value=edu.get("graduation_date", ""))
+                    edu["field"] = st.text_input("Field of Study", key=f"field_{idx}", value=edu.get("field", ""), help="Software Engineering, Computer Science, Business Studies, Psychology, etc.")
+                    edu["graduation_date"] = st.text_input("Graduation Date", key=f"grad_date_{idx}", value=edu.get("graduation_date", ""), help="Enter the date in dd/mm/yyyy format.")
 
-                edu["gpa"] = st.text_input("GPA (optional)", key=f"gpa_{idx}", value=edu.get("gpa", ""))
+                edu["gpa"] = st.text_input("GPA (optional)", key=f"gpa_{idx}", value=edu.get("gpa", ""), help="Enter the GPA score you got.")
 
                 # Educational Achievements
                 st.markdown("##### Achievements & Activities")
-                edu_achv_text = st.text_area("Enter achievements (one per line)", key=f"edu_achv_{idx}", value="\n".join(edu.get("achievements", [])), height=100, help="List academic achievements, relevant coursework or activities")
-                edu["achievements"] = [a.strip() for a in edu_achv_text.split("\n") if a.strip()]
+                edu_achv = st.text_area("Enter achievements (one per line)", key=f"edu_achv_{idx}", value="\n".join(edu.get("achievements", [])), height=100, help="List academic achievements, relevant coursework or activities.")
+                edu["achievements"] = [a.strip() for a in edu_achv.split("\n") if a.strip()]
 
                 if st.button("Remove Education", key=f"remove_edu_{idx}"):
                     st.session_state.form_data["education"].pop(idx)
                     st.rerun()
 
-        # Skills Section
+        # ----------
+        # Experience
+        # ----------
+        st.subheader("Work Experience")
+        if "experience" not in st.session_state.form_data:
+            st.session_state.form_data["experience"] = []
+
+        if st.button("Add Experience"):
+            st.session_state.form_data["experience"].append({
+                "company": "",
+                "position": "",
+                "start_date": "",
+                "end_date": "",
+                "description": "",
+                "responsibilities": []
+            })
+
+        for idx, exp in enumerate(st.session_state.form_data["experience"]):
+            with st.expander(f"Experience {idx + 1}", expanded=True):
+                col1, col2 = st.columns(2)
+                with col1:
+                    exp["company"] = st.text_input("Company Name", key=f"company_{idx}", value=exp.get("company", ""), help="Enter the company name you worked for.")
+                    exp["position"] = st.text_input("Position", key=f"position_{idx}", value=exp.get("position", ""), help="Enter the position you held.")
+                with col2:
+                    exp["start_date"] = st.text_input("Start Date", key=f"start_date_{idx}", value=exp.get("start_date", ""), help="Enter date in dd/mm/yyyy format.")
+                    exp["end_date"] = st.text_input("End Date", key=f"end_date_{idx}", value=exp.get("end_date", ""), help="Enter date in dd/mm/yyyy format.")
+
+                exp["description"] = st.text_area("Role Overview", key=f"desc_{idx}", value=exp.get("description", ""), help="Brief overview of your role and impact.")
+
+                # Responsibilities
+                st.markdown("##### Key Responsibilities")
+                exp_resp = st.text_area("Enter responsibilities (one per line)", key=f"exp_resp_{idx}", value="\n".join(exp.get("responsibilities", [])), height=100, help="List the main responsibilities you had in the company.")
+                exp["responsibilities"] = [r.strip() for r in exp_resp.split("\n") if r.strip()]
+
+                if st.button("Remove Experience", key=f"remove_exp_{idx}"):
+                    st.session_state.form_data["experience"].pop(idx)
+                    st.rerun()
+
+        # --------
+        # Projects
+        # --------
+        st.subheader("Projects")
+        if "projects" not in st.session_state.form_data:
+            st.session_state.form_data["projects"] = []
+
+        if st.button("Add Project"):
+            st.session_state.form_data["projects"].append({
+                "name": "",
+                "technologies": "",
+                "description": "",
+                "responsibilities": [],
+                "link": ""
+            })
+
+        for idx, proj in enumerate(st.session_state.form_data["projects"]):
+            with st.expander(f"Project {idx + 1}", expanded=True):
+                proj["name"] = st.text_input("Project Name", key=f"proj_name_{idx}", value=proj.get("name", ""), help="Enter the name of your project.")
+                proj["technologies"] = st.text_input("Technologies Used", key=f"proj_tech_{idx}", value=proj.get("technologies", ""), help="List the main technologies, frameworks and tools used in the project.")
+                proj["description"] = st.text_area("Project Overview", key=f"proj_desc_{idx}", value=proj.get("description", ""), help="Brief overview of the project and its goals.")
+
+                # Project Responsibilities
+                st.markdown("##### Key Responsibilities")
+                proj_resp_text = st.text_area("Enter responsibilities (one per line)", key=f"proj_resp_{idx}", value="\n".join(proj.get("responsibilities", [])), height=100, help="List your main responsibilities in the project.")
+                proj["responsibilities"] = [r.strip() for r in proj_resp_text.split("\n") if r.strip()]
+
+                proj["link"] = st.text_input("Project Link (optional)", key=f"proj_link_{idx}", value=proj.get("link", ""), help="Link to the project repository, demo or documentation.")
+
+                if st.button("Remove Project", key=f"remove_proj_{idx}"):
+                    st.session_state.form_data["projects"].pop(idx)
+                    st.rerun()
+                
+        # ----------
+        # References
+        # ----------
+        st.subheader("References")
+        if "references" not in st.session_state.form_data:
+            st.session_state.form_data["references"] = []
+
+        if st.button("Add Reference"):
+            st.session_state.form_data["references"].append({
+                "name": "",
+                "company": "",
+                "phone": "",
+                "email": ""
+            })
+
+        for idx, ref in enumerate(st.session_state.form_data["references"]):
+            with st.expander(f"Reference {idx + 1}", expanded=True):
+                col1, col2 = st.columns(2)
+                with col1:
+                    ref["name"] = st.text_input("Reference Name", key=f"ref_name_{idx}", value=ref.get("name", ""), help="Enter the name of your reference.")
+                    ref["company"] = st.text_input("Company Name", key=f"ref_comp_{idx}", value=ref.get("company", ""), help="Enter the company they work in.")
+                with col2:
+                    ref["phone"] = st.text_input("Phone", key=f"ref_phone_{idx}", value=ref.get("phone", ""), help="Enter their phone number.")
+                    ref["email"] = st.text_input("Email", key=f"ref_email_{idx}", value=ref.get("email", ""), help="Enter their email address.")
+
+                if st.button("Remove Reference", key=f"remove_ref_{idx}"):
+                    st.session_state.form_data["references"].pop(idx)
+                    st.rerun()
+
+        # ------
+        # Skills
+        # ------
         st.subheader("Skills")
-        if "skills_categories" not in st.session_state.form_data:
-            st.session_state.form_data["skills_categories"] = {
+        if "skills" not in st.session_state.form_data:
+            st.session_state.form_data["skills"] = {
                 "technical": [],
                 "soft": [],
                 "languages": [],
@@ -311,46 +345,30 @@ class SkillMatchApp:
 
         col1, col2 = st.columns(2)
         with col1:
-            tech_skills = st.text_area("Technical Skills (one per line)", value="\n".join(
-                st.session_state.form_data["skills_categories"]["technical"]), height=150, help="Programming languages, frameworks, databases, etc.")
-            st.session_state.form_data["skills_categories"]["technical"] = [s.strip() for s in tech_skills.split("\n") if s.strip()]
+            tech_skills = st.text_area("Technical Skills (one per line)", value="\n".join(st.session_state.form_data["skills"]["technical"]), height=150, help="Programming languages, frameworks, databases, etc.")
+            st.session_state.form_data["skills"]["technical"] = [s.strip() for s in tech_skills.split("\n") if s.strip()]
 
-            soft_skills = st.text_area("Soft Skills (one per line)", value="\n".join(
-                st.session_state.form_data["skills_categories"]["soft"]), height=150, help="Leadership, communication, problem-solving, etc.")
-            st.session_state.form_data["skills_categories"]["soft"] = [s.strip() for s in soft_skills.split("\n") if s.strip()]
+            soft_skills = st.text_area("Soft Skills (one per line)", value="\n".join(st.session_state.form_data["skills"]["soft"]), height=150, help="Leadership, communication, problem-solving, etc.")
+            st.session_state.form_data["skills"]["soft"] = [s.strip() for s in soft_skills.split("\n") if s.strip()]
 
         with col2:
-            languages = st.text_area("Languages (one per line)", value="\n".join(
-                st.session_state.form_data["skills_categories"]["languages"]), height=150, help="Programming or human languages with proficiency level")
-            st.session_state.form_data["skills_categories"]["languages"] = [l.strip() for l in languages.split("\n") if l.strip()]
+            languages = st.text_area("Languages (one per line)", value="\n".join(st.session_state.form_data["skills"]["languages"]), height=150, help="Spoken or written languages.")
+            st.session_state.form_data["skills"]["languages"] = [l.strip() for l in languages.split("\n") if l.strip()]
 
-            tools = st.text_area("Tools & Technologies (one per line)", value="\n".join(
-                st.session_state.form_data["skills_categories"]["tools"]), height=150, help="Development tools, software, platforms, etc.")
-            st.session_state.form_data["skills_categories"]["tools"] = [t.strip() for t in tools.split("\n") if t.strip()]
-
-        # Update form data in session state
-        st.session_state.form_data.update({
-            "summary": summary
-        })
+            tools = st.text_area("Tools & Technologies (one per line)", value="\n".join(st.session_state.form_data["skills"]["tools"]), height=150, help="Development tools, software, platforms, etc.")
+            st.session_state.form_data["skills"]["tools"] = [t.strip() for t in tools.split("\n") if t.strip()]
 
         # Generate Resume button
         if st.button("Generate Resume 📄", type="primary"):
-            print("Validating form data...")
-            print(f"Session state form data: {st.session_state.form_data}")
-            print(f"Email input value: {st.session_state.get('email_input', '')}")
 
             # Get the current values from form
-            current_name = st.session_state.form_data["personal_info"]["full_name"].strip()
+            current_name = st.session_state.form_data["personal_info"]["name"].strip()
             current_email = st.session_state.email_input if "email_input" in st.session_state else ""
-
-            print(f"Current name: {current_name}")
-            print(f"Current email: {current_email}")
 
             # Validate required fields
             if not current_name:
                 st.error("⚠️ Please enter your full name.")
                 return
-
             if not current_email:
                 st.error("⚠️ Please enter your email address.")
                 return
@@ -359,53 +377,37 @@ class SkillMatchApp:
             st.session_state.form_data["personal_info"]["email"] = current_email
 
             try:
-                print("Preparing resume data...")
+
                 # Prepare resume data with current form values
                 resume_data = {
                     "personal_info": st.session_state.form_data["personal_info"],
                     "summary": st.session_state.form_data.get("summary", "").strip(),
-                    "experience": st.session_state.form_data.get("experiences", []),
                     "education": st.session_state.form_data.get("education", []),
+                    "experience": st.session_state.form_data.get("experience", []),
                     "projects": st.session_state.form_data.get("projects", []),
-                    "skills": st.session_state.form_data.get("skills_categories", {
+                    "references": st.session_state.form_data.get("references", []),
+                    "skills": st.session_state.form_data.get("skills", {
                         "technical": [],
                         "soft": [],
                         "languages": [],
                         "tools": []
-                    })
+                    }),
+                    "selected_template": selected_template
                 }
-
-                print(f"Resume data prepared: {resume_data}")
 
                 try:
                     # Generate resume
                     resume_buffer = self.builder.generate_resume(resume_data)
                     if resume_buffer:
                         try:
+
                             # Save resume data to database
                             #save_resume_data(resume_data)
 
                             # Offer the resume for download
-                            st.success("✅ Resume generated successfully!")
+                            st.success("✅ Resume generated successfully.")
 
-                            # Show snowflake effect
-                            st.snow()
-
-                            st.download_button(
-                                label="Download Resume 📥",
-                                data=resume_buffer,
-                                file_name=f"{current_name.replace(' ', '_')}_resume.docx",
-                                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                                on_click=lambda: st.balloons()
-                            )
-                        except Exception as db_error:
-                            print(f"Warning: Failed to save to database: {str(db_error)}")
-
-                            # Still allow download even if database save fails
-                            st.warning(
-                                "⚠️ Resume generated but couldn't be saved to database")
-                            
-                            # Show balloons effect
+                            # Show effect
                             st.balloons()
 
                             st.download_button(
@@ -415,18 +417,26 @@ class SkillMatchApp:
                                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                                 on_click=lambda: st.balloons()
                             )
+                        except Exception as db_error:
+                            st.error(f"❌ Failed to save to database: {str(db_error)}")
+
+                            # Still allow download even if database save fails
+                            st.warning("⚠️ Resume generated but couldn't be saved to database.")
+
+                            st.download_button(
+                                label="Download Resume 📥",
+                                data=resume_buffer,
+                                file_name=f"{current_name.replace(' ', '_')}_resume.docx",
+                                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                on_click=lambda: st.balloons()
+                            )
                     else:
-                        st.error(
-                            "❌ Failed to generate resume. Please try again.")
-                        print("Resume buffer was None")
+                        st.error("❌ Failed to generate resume. Please try again.")
+                        
                 except Exception as gen_error:
-                    print(f"Error during resume generation: {str(gen_error)}")
-                    print(f"Full traceback: {traceback.format_exc()}")
                     st.error(f"❌ Error generating resume: {str(gen_error)}")
 
             except Exception as e:
-                print(f"Error preparing resume data: {str(e)}")
-                print(f"Full traceback: {traceback.format_exc()}")
                 st.error(f"❌ Error preparing resume data: {str(e)}")
 
     def render_analyzer(self):
@@ -571,8 +581,7 @@ class SkillMatchApp:
                             'education': analysis.get('education', []),
                             'experience': analysis.get('experience', []),
                             'projects': analysis.get('projects', []),
-                            'skills': analysis.get('skills', []),
-                            'template': ''
+                            'skills': analysis.get('skills', [])
                         }
 
                         # Save to database
@@ -1965,7 +1974,6 @@ class SkillMatchApp:
         col1, col2, col3 = st.columns([1, 3, 1])
         
         with col2:
-            # GitHub repo button
             st.markdown("""
             <div style="display: flex; justify-content: center; align-items: center; margin-bottom: 10px;">
                 <a href="https://github.com/kaveen-bandara/SkillMatch" target="_blank" style="text-decoration: none;">
@@ -1973,7 +1981,7 @@ class SkillMatchApp:
                         <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="black" style="margin-right: 5px;">
                             <path d="M12 .5C5.65.5.5 5.65.5 12.01c0 5.1 3.3 9.42 7.9 10.96.58.1.8-.25.8-.56 0-.28-.01-1.02-.01-2-3.22.7-3.9-1.55-3.9-1.55-.53-1.34-1.3-1.7-1.3-1.7-1.05-.72.08-.7.08-.7 1.17.08 1.79 1.2 1.79 1.2 1.04 1.78 2.74 1.26 3.4.96.1-.75.4-1.26.72-1.55-2.57-.29-5.27-1.28-5.27-5.7 0-1.26.45-2.29 1.2-3.1-.13-.3-.52-1.5.12-3.1 0 0 .98-.31 3.2 1.2a11.2 11.2 0 0 1 5.8 0c2.22-1.51 3.2-1.2 3.2-1.2.64 1.6.25 2.8.12 3.1.75.81 1.2 1.84 1.2 3.1 0 4.43-2.7 5.4-5.3 5.7.42.36.77 1.1.77 2.22 0 1.6-.01 2.9-.01 3.3 0 .3.2.66.8.55A11.52 11.52 0 0 0 23.5 12c0-6.36-5.15-11.5-11.5-11.5z" fill="gold" />
                         </svg>
-                        <span style="color: white; font-size: 14px;">Check GitHub repository</span>
+                        <span style="color: white; font-size: 14px;">You want the code? Go get the code here.</span>
                     </div>
                 </a>
             </div>
@@ -1982,7 +1990,7 @@ class SkillMatchApp:
             # Footer text
             st.markdown("""
             <p style="text-align: center;">
-                Powered by <b>Streamlit</b> & <b>Google Gemini</b>
+                Powered by <b>Streamlit</b>, <b>Supabase</b> & <b>Google Gemini</b>
                         <br /> Developed by 
                 <a href="https://www.linkedin.com/in/kaveen-bandara/" target="_blank" style="text-decoration: none; color: #FFFFFF">
                     <b>Kaveen Bandara</b>

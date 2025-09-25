@@ -24,33 +24,18 @@ def init_database():
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS resume_data(
                     id SERIAL PRIMARY KEY,
-                    name TEXT NOT NULL,
-                    email TEXT NOT NULL,
-                    phone TEXT NOT NULL,
-                    linkedin TEXT,
-                    github TEXT,
-                    portfolio TEXT,
+                    name VARCHAR(747) NOT NULL,
+                    email VARCHAR(320) NOT NULL,
+                    phone VARCHAR(30) NOT NULL,
+                    github VARCHAR(255),
+                    linkedin VARCHAR(255),
+                    portfolio VARCHAR(255),
                     summary TEXT,
-                    target_role TEXT,
-                    target_category TEXT,
                     education TEXT,
                     experience TEXT,
                     projects TEXT,
                     skills TEXT,
-                    template TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-            
-            # Create resume_skills table
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS resume_skills(
-                    id SERIAL PRIMARY KEY,
-                    resume_id INTEGER REFERENCES resume_data(id) ON DELETE CASCADE,
-                    skill_name TEXT NOT NULL,
-                    skill_category TEXT NOT NULL,
-                    proficiency_score REAL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
                 )
             """)
             
@@ -63,9 +48,11 @@ def init_database():
                     keyword_match_score REAL,
                     format_score REAL,
                     section_score REAL,
+                    target_role TEXT,
+                    target_category TEXT,
                     missing_skills TEXT,
                     recommendations TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
                 )
             """)
             
@@ -75,7 +62,7 @@ def init_database():
                     id SERIAL PRIMARY KEY,
                     admin_email VARCHAR(255) NOT NULL,
                     action TEXT NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
                 )
             """)
             
@@ -84,8 +71,8 @@ def init_database():
                 CREATE TABLE IF NOT EXISTS admin(
                     id SERIAL PRIMARY KEY,
                     email VARCHAR(255) NOT NULL UNIQUE,
-                    password TEXT NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    password VARCHAR(255) NOT NULL,
+                    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
                 )
             """)
 
@@ -96,7 +83,16 @@ def init_database():
                     resume_id INTEGER REFERENCES resume_data(id) ON DELETE CASCADE,
                     resume_score INTEGER,
                     job_role TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+
+            # Create error_logs table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS error_logs(
+                    id SERIAL PRIMARY KEY,
+                    traceback TEXT,
+                    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
                 )
             """)
 
@@ -131,8 +127,7 @@ def save_resume_data(data):
                     str(data.get("education", [])),
                     str(data.get("experience", [])),
                     str(data.get("projects", [])),
-                    str(data.get("skills", [])),
-                    data.get("template", "")
+                    str(data.get("skills", []))
                 ))
 
                 # Get the inserted row's ID
@@ -506,3 +501,20 @@ def reset_ai_analysis_stats():
     except Exception as e:
         print(f"Error resetting AI analysis stats: {e}")
         return {"success": False, "message": f"Error resetting AI analysis statistics: {str(e)}"}
+    
+def save_error(error):
+    """
+    Save error message to database
+    """
+    try:
+        with get_database_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    "INSERT INTO error_logs (traceback) VALUES (%s)",
+                    (error,)
+                )
+                return True
+
+    except Exception as e:
+        print(f"Failed to save error: {str(e)}")
+        return False
