@@ -1,1 +1,1 @@
-# SkillMatch-Smart-Resume-Analyzer
+# SkillMatch-Analyzer
